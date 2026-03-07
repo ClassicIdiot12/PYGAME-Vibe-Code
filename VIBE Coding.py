@@ -15,39 +15,11 @@ clock = pygame.time.Clock()
 
 vec = pygame.math.Vector2
 font = pygame.font.SysFont('Arial', 18, bold=True)
-title_font = pygame.font.SysFont('Arial', 48, bold=True)
-btn_font = pygame.font.SysFont('Arial', 24, bold=True)
+title_font = pygame.font.SysFont('Arial', 48, bold=True) # New font for the victory screen
 
 env_colors = {
     "sky": (100, 180, 210), "dirt": (86, 52, 24), "grass": (54, 180, 44)
 }
-
-# --- UI Classes ---
-class Button:
-    def __init__(self, x, y, w, h, text):
-        self.rect = pygame.Rect(x, y, w, h)
-        self.text = text
-        self.color = (60, 60, 70)
-        self.hover_color = (100, 150, 255) # Glows blue when hovered
-
-    def draw(self, surface):
-        mouse_pos = pygame.mouse.get_pos()
-        is_hovered = self.rect.collidepoint(mouse_pos)
-        current_color = self.hover_color if is_hovered else self.color
-        
-        pygame.draw.rect(surface, current_color, self.rect, border_radius=8)
-        # Inner dark bezel
-        pygame.draw.rect(surface, (30, 30, 35), self.rect.inflate(-6, -6), border_radius=6)
-        
-        text_surf = btn_font.render(self.text, True, current_color if is_hovered else (200, 200, 200))
-        text_rect = text_surf.get_rect(center=self.rect.center)
-        surface.blit(text_surf, text_rect)
-
-    def is_clicked(self, event):
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if self.rect.collidepoint(event.pos):
-                return True
-        return False
 
 # --- Visual Effects Classes ---
 class Particle:
@@ -408,7 +380,6 @@ class Player(pygame.sprite.Sprite):
 
         if self.is_climbing: self.acc.y = 0
 
-        # X-AXIS
         if keys[pygame.K_LEFT] or keys[pygame.K_a]: self.acc.x, input_dir.x = -self.ACCEL, -1
         if keys[pygame.K_RIGHT] or keys[pygame.K_d]: self.acc.x, input_dir.x = self.ACCEL, 1
 
@@ -425,7 +396,6 @@ class Player(pygame.sprite.Sprite):
         if self.pos.x < self.width / 2: self.pos.x, self.vel.x = self.width / 2, self.vel.x * -0.5 
         elif self.pos.x > WIDTH - self.width / 2: self.pos.x, self.vel.x = WIDTH - self.width / 2, self.vel.x * -0.5 
 
-        # Y-AXIS
         if keys[pygame.K_UP] or keys[pygame.K_w]: input_dir.y = -1
         if keys[pygame.K_DOWN] or keys[pygame.K_s]: input_dir.y = 1
 
@@ -441,7 +411,7 @@ class Player(pygame.sprite.Sprite):
         for hit in pygame.sprite.spritecollide(self, trampolines, False):
             if self.vel.y > 0 and self.rect.bottom <= hit.rect.centery + 15: 
                 self.rect.bottom = hit.rect.top
-                self.vel.y = self.JUMP_POWER * 1.6 
+                self.vel.y = self.JUMP_POWER * 2.0
                 self.is_climbing = False
             self.pos.y = self.rect.bottom
 
@@ -491,6 +461,7 @@ class Player(pygame.sprite.Sprite):
 player = Player()
 platforms, vines, hazards, trampolines, cannons, projectiles, npcs, portals, scenery = [pygame.sprite.Group() for _ in range(9)]
 boss_entity = None
+game_state = 'playing'
 
 def load_level(level_num):
     global boss_entity
@@ -549,12 +520,47 @@ def load_level(level_num):
         boss_entity = SpiderBoss(WIDTH//2, 20)
         player.spawn_point = vec(WIDTH//2, HEIGHT - 100)
 
+    elif level_num == 7: 
+        env_colors.update({"sky": (150, 200, 250), "dirt": (200, 200, 220), "grass": (220, 220, 250)}) 
+        platforms.add(Platform(0, HEIGHT - 60, 100, 60), Platform(WIDTH - 100, HEIGHT - 60, 100, 60))
+        platforms.add(Platform(200, 450, 60, 30), Platform(400, 350, 60, 30), Platform(600, 250, 60, 30))
+        trampolines.add(Trampoline(300, HEIGHT - 60, 60, 30), Trampoline(500, HEIGHT - 60, 60, 30))
+        cannons.add(Cannon(WIDTH - 40, 330, -1, 0), Cannon(WIDTH - 40, 230, -1, 1000))
+        npcs.add(NPC(50, HEIGHT - 110, "You survived! Now ascend the sky ruins!"))
+        portals.add(Portal(WIDTH - 50, HEIGHT - 60))
+        player.spawn_point = vec(50, HEIGHT - 100)
+
+    elif level_num == 8:
+        env_colors.update({"sky": (40, 80, 40), "dirt": (60, 40, 20), "grass": (20, 80, 20)})
+        platforms.add(Platform(0, HEIGHT - 60, 150, 60), Platform(WIDTH - 150, 100, 150, 30))
+        hazards.add(Hazard(150, HEIGHT - 30, WIDTH - 150, 30)) 
+        vines.add(Vine(200, 150, 400), Vine(350, 50, 350), Vine(500, 200, 350))
+        cannons.add(Cannon(0, 250, 1, 0), Cannon(0, 400, 1, 1000))
+        npcs.add(NPC(100, HEIGHT - 110, "Don't look down. Keep moving!"))
+        portals.add(Portal(WIDTH - 75, 100))
+        player.spawn_point = vec(50, HEIGHT - 100)
+
+    elif level_num == 9:
+        env_colors.update({"sky": (255, 100, 50), "dirt": (50, 20, 20), "grass": (100, 30, 30)}) 
+        platforms.add(Platform(0, HEIGHT - 60, 100, 60), Platform(WIDTH - 100, 80, 100, 30))
+        platforms.add(Platform(200, 480, 50, 30), Platform(350, 380, 50, 30), Platform(500, 280, 50, 30), Platform(650, 180, 50, 30))
+        trampolines.add(Trampoline(250, HEIGHT - 40, 40, 30), Trampoline(550, HEIGHT - 40, 40, 30))
+        vines.add(Vine(420, 180, 200))
+        hazards.add(Hazard(100, HEIGHT - 30, WIDTH - 100, 30))
+        cannons.add(Cannon(WIDTH - 40, 460, -1, 0), Cannon(0, 360, 1, 500), Cannon(WIDTH - 40, 260, -1, 1000), Cannon(0, 160, 1, 1500))
+        npcs.add(NPC(50, HEIGHT - 110, "The final stretch! You can do this!"))
+        portals.add(Portal(WIDTH - 50, 80))
+        player.spawn_point = vec(50, HEIGHT - 100)
+
     player.pos = vec(player.spawn_point)
 
-# Background Elements Initialization
+current_level = 1
+load_level(current_level)
+
 light_surface = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
 pygame.draw.polygon(light_surface, (255, 240, 150, 25), [(100, -50), (250, -50), (200, HEIGHT), (-50, HEIGHT)])
 pygame.draw.polygon(light_surface, (255, 240, 150, 20), [(450, -50), (600, -50), (550, HEIGHT), (300, HEIGHT)])
+
 clouds = [Cloud() for _ in range(3)] 
 bg_trees = [Tree(x, HEIGHT - 40, is_bg=True) for x in range(-50, WIDTH + 100, 120)]
 fg_trees = [Tree(x, HEIGHT - 40, is_bg=False) for x in range(80, WIDTH, 250)]
@@ -562,127 +568,25 @@ bats = [Bat() for _ in range(5)]
 stalactites = [Stalactite() for _ in range(10)]
 rock_tumblers = [RockTumbler() for _ in range(15)]
 
-# --- Game State Variables ---
-GAME_STATE = "SPLASH" # SPLASH, MENU, PLAYING
-current_level = 1
-splash_start_time = pygame.time.get_ticks()
-
-# Main Menu Variables
-btn_play = Button(WIDTH//2 - 100, HEIGHT//2 - 20, 200, 50, "PLAY")
-btn_levels = Button(WIDTH//2 - 100, HEIGHT//2 + 50, 200, 50, "LEVEL SELECT")
-btn_settings = Button(WIDTH//2 - 100, HEIGHT//2 + 120, 200, 50, "SETTINGS")
-menu_fade_alpha = 255
-menu_bg_timer = 0
-menu_scene_index = 0
-menu_scenes = [
-    {"sky": (100, 180, 210), "dirt": (86, 52, 24), "grass": (54, 180, 44)},   # Jungle
-    {"sky": (20, 20, 40), "dirt": (40, 30, 30), "grass": (20, 50, 40)},       # Cave Entrance
-    {"sky": (10, 10, 15), "dirt": (70, 70, 75), "grass": (50, 60, 50)}        # Deep Cave
-]
-
 # --- Main Game Loop ---
 running = True
 while running:
-    current_time = pygame.time.get_ticks()
-    
-    # 1. EVENT HANDLING
     for event in pygame.event.get():
         if event.type == pygame.QUIT: running = False
-        
-        if GAME_STATE == "PLAYING":
-            if event.type == pygame.KEYDOWN:
+        if event.type == pygame.KEYDOWN:
+            if game_state == 'playing':
                 if event.key in (pygame.K_SPACE, pygame.K_UP, pygame.K_w): player.jump(platforms, vines)
-                
-        elif GAME_STATE == "MENU":
-            if btn_play.is_clicked(event):
-                GAME_STATE = "PLAYING"
-                load_level(1)
-            # Level Select and Settings buttons act as placeholders for now!
+            elif game_state == 'victory':
+                if event.key == pygame.K_r:  # Press R to restart
+                    current_level = 1
+                    game_state = 'playing'
+                    load_level(current_level)
 
-    # 2. STATE LOGIC & DRAWING
-    if GAME_STATE == "SPLASH":
-        screen.fill((10, 10, 15)) # Dark background
-        title_surf = title_font.render("CUBE'S JOURNEY HOME", True, (255, 255, 255))
-        title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//2))
-        screen.blit(title_surf, title_rect)
-        
-        # After 2 seconds, switch to menu!
-        if current_time - splash_start_time > 2000:
-            GAME_STATE = "MENU"
-            menu_bg_timer = current_time
-
-    elif GAME_STATE == "MENU":
-        # Cycle background environments every 2 seconds
-        if current_time - menu_bg_timer > 2000:
-            menu_bg_timer = current_time
-            menu_scene_index = (menu_scene_index + 1) % len(menu_scenes)
-            env_colors.update(menu_scenes[menu_scene_index])
-
-        # Draw Menu Background
-        screen.fill(env_colors["sky"])
-        
-        # Draw dynamic background based on the scene index
-        if menu_scene_index == 0: # Jungle
-            for cloud in clouds: cloud.update(); cloud.draw(screen)
-            for tree in bg_trees: tree.draw(screen)
-            for tree in fg_trees: tree.draw(screen)
-            screen.blit(light_surface, (0, 0))
-        elif menu_scene_index == 1: # Cave Entrance
-            # Simplified static entrance
-            pygame.draw.rect(screen, (10, 10, 15), (WIDTH//4, 0, WIDTH//2, HEIGHT)) 
-        else: # Deep Cave
-            for bat in bats: bat.update(); bat.draw(screen)
-            for stalactite in stalactites: stalactite.update(); stalactite.draw(screen)
-            dim_light = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-            dim_light.fill((50, 30, 10, 50))
-            screen.blit(dim_light, (0,0))
-
-        # Draw a simple floor
-        pygame.draw.rect(screen, env_colors["dirt"], (0, HEIGHT - 40, WIDTH, 40))
-        pygame.draw.rect(screen, env_colors["grass"], (0, HEIGHT - 40, WIDTH, 10))
-
-        # Draw interactive Cube at the bottom center
-        player.rect.center = (WIDTH // 2, HEIGHT - 60)
-        
-        # Cube Eye tracks the mouse!
-        mouse_x, mouse_y = pygame.mouse.get_pos()
-        dx, dy = mouse_x - player.rect.centerx, mouse_y - player.rect.centery
-        dist = math.hypot(dx, dy)
-        if dist > 0:
-            player.look_dir = vec(dx/dist, dy/dist)
-        
-        player.draw(screen)
-
-        # Draw UI
-        # Translucent overlay to make text readable
-        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 100))
-        screen.blit(overlay, (0, 0))
-
-        # Title
-        title_surf = title_font.render("CUBE'S JOURNEY HOME", True, (255, 255, 255))
-        title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//4))
-        screen.blit(title_surf, title_rect)
-
-        # Buttons
-        btn_play.draw(screen)
-        btn_levels.draw(screen)
-        btn_settings.draw(screen)
-
-        # Smooth Fade-In Effect when entering menu
-        if menu_fade_alpha > 0:
-            fade_surf = pygame.Surface((WIDTH, HEIGHT))
-            fade_surf.fill((10, 10, 15))
-            fade_surf.set_alpha(menu_fade_alpha)
-            screen.blit(fade_surf, (0, 0))
-            menu_fade_alpha = max(0, menu_fade_alpha - 5)
-
-    elif GAME_STATE == "PLAYING":
+    if game_state == 'playing':
         if pygame.sprite.spritecollide(player, portals, False) and player.state == 'alive':
             current_level += 1
-            if current_level > 6: 
-                GAME_STATE = "MENU" # Win the game, go to menu!
-                menu_fade_alpha = 255 # Reset fade for transition
+            if current_level > 9: 
+                game_state = 'victory'
             else:
                 load_level(current_level)
 
@@ -696,25 +600,19 @@ while running:
         if boss_entity: boss_entity.update(hazards)
         for npc in npcs: npc.update()
 
-        # Update visuals
-        if current_level < 5:
-            for cloud in clouds: cloud.update()
-        else: 
-            for bat in bats: bat.update()
-            for stalactite in stalactites: stalactite.update()
-            for rt in rock_tumblers: rt.update()
-
+    # --- DRAWING ---
+    if game_state == 'playing':
         screen.fill(env_colors["sky"])
         
-        if current_level < 5:
-            for cloud in clouds: cloud.draw(screen)
+        if current_level < 5 or current_level > 6:
+            for cloud in clouds: cloud.update(); cloud.draw(screen)
             for tree in bg_trees: tree.draw(screen)
             for tree in fg_trees: tree.draw(screen)
             screen.blit(light_surface, (0, 0))
-        else: 
-            for bat in bats: bat.draw(screen)
-            for stalactite in stalactites: stalactite.draw(screen)
-            for rt in rock_tumblers: rt.draw(screen)
+        elif current_level in [5, 6]: 
+            for bat in bats: bat.update(); bat.draw(screen)
+            for stalactite in stalactites: stalactite.update(); stalactite.draw(screen)
+            for rt in rock_tumblers: rt.update(); rt.draw(screen)
             dim_light = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
             dim_light.fill((50, 30, 10, 50))
             screen.blit(dim_light, (0,0))
@@ -737,9 +635,24 @@ while running:
             npc.draw_tooltip(screen, player.pos) 
 
         player.draw(screen)
+        
+    elif game_state == 'victory':
+        # Draw the victory screen
+        screen.fill((255, 215, 0)) # Golden celebration background
+        
+        # Render Texts
+        title_text = title_font.render("VICTORY!", True, (255, 255, 255))
+        subtitle_text = font.render("Cube has finally returned home!", True, (0, 0, 0))
+        restart_text = font.render("Press 'R' to play again", True, (50, 50, 50))
+        
+        # Draw Texts
+        screen.blit(title_text, title_text.get_rect(center=(WIDTH//2, HEIGHT//2 - 50)))
+        screen.blit(subtitle_text, subtitle_text.get_rect(center=(WIDTH//2, HEIGHT//2 + 10)))
+        screen.blit(restart_text, restart_text.get_rect(center=(WIDTH//2, HEIGHT//2 + 50)))
 
     pygame.display.flip()
     clock.tick(FPS)
 
 pygame.quit()
+
 sys.exit()
