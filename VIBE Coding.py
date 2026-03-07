@@ -603,6 +603,19 @@ splash_start_time = pygame.time.get_ticks()
 btn_play = Button(WIDTH//2 - 100, HEIGHT//2 - 20, 200, 50, "PLAY")
 btn_levels = Button(WIDTH//2 - 100, HEIGHT//2 + 50, 200, 50, "LEVEL SELECT")
 btn_settings = Button(WIDTH//2 - 100, HEIGHT//2 + 120, 200, 50, "SETTINGS")
+
+# Level Select UI Setup
+level_btns = []
+for i in range(9):
+    level_btns.append(Button(WIDTH//2 - 170 + (i%3)*130, HEIGHT//2 - 60 + (i//3)*70, 90, 40, f"LEVEL {i+1}"))
+btn_back_ls = Button(WIDTH//2 - 100, HEIGHT - 100, 200, 50, "BACK")
+
+# Settings UI Setup
+is_music_on = True
+is_sound_on = True
+btn_music = Button(WIDTH//2 - 100, HEIGHT//2 - 50, 200, 50, "MUSIC: ON")
+btn_sound = Button(WIDTH//2 - 100, HEIGHT//2 + 20, 200, 50, "SOUND: ON")
+btn_back_st = Button(WIDTH//2 - 100, HEIGHT - 100, 200, 50, "BACK")
 menu_fade_alpha = 255
 menu_bg_timer = 0
 menu_scene_index = 0
@@ -632,6 +645,30 @@ while running:
                 GAME_STATE = "PLAYING"
                 current_level = 1
                 load_level(current_level)
+            elif btn_levels.is_clicked(event):
+                GAME_STATE = "LEVEL_SELECT"
+            elif btn_settings.is_clicked(event):
+                GAME_STATE = "SETTINGS"
+                
+        elif GAME_STATE == "LEVEL_SELECT":
+            if btn_back_ls.is_clicked(event):
+                GAME_STATE = "MENU"
+            else:
+                for i, btn in enumerate(level_btns):
+                    if btn.is_clicked(event):
+                        GAME_STATE = "PLAYING"
+                        current_level = i + 1
+                        load_level(current_level)
+                        
+        elif GAME_STATE == "SETTINGS":
+            if btn_back_st.is_clicked(event):
+                GAME_STATE = "MENU"
+            elif btn_music.is_clicked(event):
+                is_music_on = not is_music_on
+                btn_music.text = "MUSIC: ON" if is_music_on else "MUSIC: OFF"
+            elif btn_sound.is_clicked(event):
+                is_sound_on = not is_sound_on
+                btn_sound.text = "SOUND: ON" if is_sound_on else "SOUND: OFF"
 
         elif GAME_STATE == "VICTORY":
             if event.type == pygame.KEYDOWN:
@@ -702,6 +739,26 @@ while running:
             fade_surf.set_alpha(menu_fade_alpha)
             screen.blit(fade_surf, (0, 0))
             menu_fade_alpha = max(0, menu_fade_alpha - 5)
+
+    elif GAME_STATE == "LEVEL_SELECT":
+        screen.fill((20, 20, 30))
+        title_surf = title_font.render("SELECT LEVEL", True, (255, 255, 255))
+        title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//4 - 20))
+        screen.blit(title_surf, title_rect)
+        
+        for btn in level_btns:
+            btn.draw(screen)
+        btn_back_ls.draw(screen)
+
+    elif GAME_STATE == "SETTINGS":
+        screen.fill((20, 20, 30))
+        title_surf = title_font.render("SETTINGS", True, (255, 255, 255))
+        title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//4 - 20))
+        screen.blit(title_surf, title_rect)
+        
+        btn_music.draw(screen)
+        btn_sound.draw(screen)
+        btn_back_st.draw(screen)
 
     elif GAME_STATE == "PLAYING":
         if pygame.sprite.spritecollide(player, portals, False) and player.state == 'alive':
