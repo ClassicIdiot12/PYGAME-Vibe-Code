@@ -15,10 +15,39 @@ clock = pygame.time.Clock()
 
 vec = pygame.math.Vector2
 font = pygame.font.SysFont('Arial', 18, bold=True)
+title_font = pygame.font.SysFont('Arial', 48, bold=True)
+btn_font = pygame.font.SysFont('Arial', 24, bold=True)
 
 env_colors = {
     "sky": (100, 180, 210), "dirt": (86, 52, 24), "grass": (54, 180, 44)
 }
+
+# --- UI Classes ---
+class Button:
+    def __init__(self, x, y, w, h, text):
+        self.rect = pygame.Rect(x, y, w, h)
+        self.text = text
+        self.color = (60, 60, 70)
+        self.hover_color = (100, 150, 255) # Glows blue when hovered
+
+    def draw(self, surface):
+        mouse_pos = pygame.mouse.get_pos()
+        is_hovered = self.rect.collidepoint(mouse_pos)
+        current_color = self.hover_color if is_hovered else self.color
+        
+        pygame.draw.rect(surface, current_color, self.rect, border_radius=8)
+        # Inner dark bezel
+        pygame.draw.rect(surface, (30, 30, 35), self.rect.inflate(-6, -6), border_radius=6)
+        
+        text_surf = btn_font.render(self.text, True, current_color if is_hovered else (200, 200, 200))
+        text_rect = text_surf.get_rect(center=self.rect.center)
+        surface.blit(text_surf, text_rect)
+
+    def is_clicked(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.rect.collidepoint(event.pos):
+                return True
+        return False
 
 # --- Visual Effects Classes ---
 class Particle:
@@ -86,7 +115,6 @@ class WebTrap(pygame.sprite.Sprite):
         if pygame.sprite.spritecollide(self, platforms, False):
             self.vy = 0
             
-        # Webs melt away after 4 seconds!
         if pygame.time.get_ticks() - self.spawn_time > 4000:
             self.kill()
 
@@ -94,29 +122,19 @@ class SpiderBoss(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
         self.image = pygame.Surface((120, 80), pygame.SRCALPHA)
-        
-        # BRIGHTENED BOSS: Vivid purple base with neon green accents
         self.color = (130, 60, 160) 
         leg_color = (100, 50, 120)
         
-        # Legs
         pygame.draw.lines(self.image, leg_color, False, [(60, 40), (20, 10), (0, 40)], 6)
         pygame.draw.lines(self.image, leg_color, False, [(60, 40), (30, 0), (10, 50)], 6)
         pygame.draw.lines(self.image, leg_color, False, [(60, 40), (100, 10), (120, 40)], 6)
         pygame.draw.lines(self.image, leg_color, False, [(60, 40), (90, 0), (110, 50)], 6)
         
-        # Body
         pygame.draw.ellipse(self.image, self.color, (20, 20, 80, 50)) 
-        
-        # Neon Toxic Stripes on the abdomen
         pygame.draw.ellipse(self.image, (50, 255, 50), (35, 30, 10, 30))
         pygame.draw.ellipse(self.image, (50, 255, 50), (55, 35, 10, 25))
         pygame.draw.ellipse(self.image, (50, 255, 50), (75, 30, 10, 30))
-        
-        # Head
         pygame.draw.circle(self.image, (60, 30, 80), (60, 60), 20) 
-        
-        # Glowing bright red eyes
         pygame.draw.circle(self.image, (255, 50, 50), (50, 65), 5)
         pygame.draw.circle(self.image, (255, 50, 50), (70, 65), 5)
 
@@ -154,7 +172,6 @@ class SpiderBoss(pygame.sprite.Sprite):
 
     def draw(self, surface):
         if self.is_dead: return
-        
         if pygame.time.get_ticks() - self.i_frames < 200:
             flash_img = self.image.copy()
             flash_img.fill((255, 255, 255, 150), special_flags=pygame.BLEND_RGBA_MULT)
@@ -194,31 +211,21 @@ class Tree:
         self.is_bg = is_bg
         self.size = random.uniform(1.5, 2.5) if is_bg else random.uniform(3.0, 5.0)
         self.sway_speed, self.sway_offset = random.uniform(0.5, 1.2), random.uniform(0, math.pi * 2)
-        
         w_shade = random.randint(30, 50) if is_bg else random.randint(50, 70)
         self.trunk_color = (w_shade, w_shade - 15, w_shade - 25)
         self.leaf_color = (15, random.randint(60, 100) if is_bg else random.randint(100, 140), 25)
-        
         self.bark_strips = []
         if not is_bg:
             for _ in range(int(8 * self.size)):
-                self.bark_strips.append((random.uniform(-12 * self.size, 12 * self.size), 
-                                         random.uniform(2, 6 * self.size), random.randint(-15, 15)))
+                self.bark_strips.append((random.uniform(-12 * self.size, 12 * self.size), random.uniform(2, 6 * self.size), random.randint(-15, 15)))
 
     def draw(self, surface):
-        time = pygame.time.get_ticks() / 1000.0
-        sway = math.sin(time * self.sway_speed + self.sway_offset) * (12 * self.size)
-        
+        sway = math.sin(pygame.time.get_ticks() / 1000.0 * self.sway_speed + self.sway_offset) * (12 * self.size)
         trunk_w, trunk_h = 30 * self.size, 200 * self.size
         pygame.draw.rect(surface, self.trunk_color, (self.base_x - trunk_w/2, self.y - trunk_h, trunk_w, trunk_h + 100))
-        
-        # RESTORED: The beautifully detailed rough bark!
         for offset_x, strip_w, shade_diff in self.bark_strips:
-            strip_color = (max(0, min(255, self.trunk_color[0] + shade_diff)),
-                           max(0, min(255, self.trunk_color[1] + shade_diff)),
-                           max(0, min(255, self.trunk_color[2] + shade_diff)))
+            strip_color = (max(0, min(255, self.trunk_color[0] + shade_diff)), max(0, min(255, self.trunk_color[1] + shade_diff)), max(0, min(255, self.trunk_color[2] + shade_diff)))
             pygame.draw.rect(surface, strip_color, (self.base_x + offset_x, self.y - trunk_h, strip_w, trunk_h + 100))
-            
         leaves_x, leaves_y = self.base_x + sway, self.y - trunk_h + (40 * self.size)
         pygame.draw.circle(surface, self.leaf_color, (int(leaves_x), int(leaves_y)), int(80 * self.size))
         pygame.draw.circle(surface, self.leaf_color, (int(leaves_x - 40*self.size), int(leaves_y + 30*self.size)), int(60 * self.size))
@@ -248,9 +255,7 @@ class Hazard(pygame.sprite.Sprite):
         self.image = pygame.Surface((w, h), pygame.SRCALPHA)
         self.image.fill((100, 255, 50, 200)) 
         self.rect = self.image.get_rect(topleft=(x, y))
-    
-    def update(self, *args):
-        pass # Base hazards don't move, but this prevents crashes if called!
+    def update(self, *args): pass 
 
 class Portal(pygame.sprite.Sprite):
     def __init__(self, x, y):
@@ -286,18 +291,12 @@ class NPC(pygame.sprite.Sprite):
 class Projectile(pygame.sprite.Sprite):
     def __init__(self, x, y, dir_x):
         super().__init__()
-        # INTENSE NEON PROJECTILE UPGRADE
         self.image = pygame.Surface((40, 20), pygame.SRCALPHA)
-        # 1. Outer translucent orange flare
         pygame.draw.ellipse(self.image, (255, 100, 0, 100), (0, 0, 40, 20)) 
-        # 2. Bright Neon Orange Outline
         pygame.draw.ellipse(self.image, (255, 150, 0), (5, 5, 30, 10))
-        # 3. Hot White Core
         pygame.draw.ellipse(self.image, (255, 255, 255), (10, 7, 20, 6))
-        
         self.rect = self.image.get_rect(center=(x, y))
-        self.vx = 7 * dir_x # Increased speed slightly to match the intensity!
-        
+        self.vx = 7 * dir_x 
     def update(self):
         self.rect.x += self.vx
         if self.rect.right < -100 or self.rect.left > WIDTH + 100: self.kill()
@@ -442,7 +441,7 @@ class Player(pygame.sprite.Sprite):
         for hit in pygame.sprite.spritecollide(self, trampolines, False):
             if self.vel.y > 0 and self.rect.bottom <= hit.rect.centery + 15: 
                 self.rect.bottom = hit.rect.top
-                self.vel.y = self.JUMP_POWER * 2.0
+                self.vel.y = self.JUMP_POWER * 1.6 
                 self.is_climbing = False
             self.pos.y = self.rect.bottom
 
@@ -502,7 +501,7 @@ def load_level(level_num):
         env_colors.update({"sky": (100, 180, 210), "dirt": (86, 52, 24), "grass": (54, 180, 44)})
         platforms.add(Platform(0, HEIGHT - 60, WIDTH, 60), Platform(200, 460, 120, 30), Platform(420, 380, 150, 30), Platform(650, 300, 100, 30))
         vines.add(Vine(250, 0, 460), Vine(480, 0, 380))
-        npcs.add(NPC(100, HEIGHT - 110, "Space/W/Up to Jump AND Climb!"))
+        npcs.add(NPC(150, HEIGHT - 110, "Space/W/Up to Jump AND Climb!"))
         portals.add(Portal(700, 300)) 
         player.spawn_point = vec(50, HEIGHT - 100)
 
@@ -510,7 +509,7 @@ def load_level(level_num):
         env_colors.update({"sky": (60, 100, 130), "dirt": (86, 52, 24), "grass": (34, 120, 34)})
         platforms.add(Platform(0, HEIGHT - 60, WIDTH, 60), Platform(150, 460, 80, 30), Platform(300, 370, 80, 30), Platform(450, 280, 80, 30), Platform(600, 190, 150, 30))
         vines.add(Vine(490, 0, 280))
-        npcs.add(NPC(190, 400, "It's getting darker... Watch your step!"))
+        npcs.add(NPC(200, 400, "It's getting darker... Watch your step!"))
         portals.add(Portal(675, 190))
         player.spawn_point = vec(50, HEIGHT - 100)
         
@@ -520,7 +519,7 @@ def load_level(level_num):
         hazards.add(Hazard(200, HEIGHT - 30, 400, 30)) 
         platforms.add(Platform(150, 440, 80, 30), Platform(320, 340, 80, 30), Platform(500, 360, 100, 30))
         vines.add(Vine(210, 0, 440), Vine(380, 0, 340))
-        npcs.add(NPC(100, HEIGHT - 110, "Don't fall in the toxic sludge!"))
+        npcs.add(NPC(150, HEIGHT - 110, "Don't fall in the toxic sludge!"))
         portals.add(Portal(700, HEIGHT - 60)) 
         player.spawn_point = vec(50, HEIGHT - 100)
 
@@ -537,7 +536,7 @@ def load_level(level_num):
         env_colors.update({"sky": (10, 10, 15), "dirt": (70, 70, 75), "grass": (50, 60, 50)})
         platforms.add(Platform(0, HEIGHT - 60, 150, 60), Platform(200, 450, 80, 30), Platform(380, 370, 80, 30), Platform(580, 290, 80, 30), Platform(350, 200, 100, 30), Platform(150, 150, 150, 30))
         cannons.add(Cannon(WIDTH - 40, 420, -1, 0), Cannon(0, 320, 1, 500), Cannon(WIDTH - 40, 220, -1, 1000)) 
-        npcs.add(NPC(100, HEIGHT - 110, "Watch out for the automated defenses!"))
+        npcs.add(NPC(150, HEIGHT - 110, "Watch out for the automated defenses!"))
         portals.add(Portal(225, 150)) 
         player.spawn_point = vec(50, HEIGHT - 100)
 
@@ -545,20 +544,17 @@ def load_level(level_num):
         env_colors.update({"sky": (5, 5, 10), "dirt": (40, 40, 45), "grass": (60, 20, 60)}) 
         platforms.add(Platform(0, HEIGHT - 60, WIDTH, 60)) 
         trampolines.add(Trampoline(100, HEIGHT - 90, 60, 30), Trampoline(WIDTH - 160, HEIGHT - 90, 60, 30))
-        npcs.add(NPC(50, HEIGHT - 110, "Use the glowing geysers to jump high!"))
+        npcs.add(NPC(200, HEIGHT - 110, "Use the glowing geysers to launch high!"))
+        npcs.add(NPC(WIDTH - 200, HEIGHT - 110, "Bounce on the spider's head to defeat it!"))
         boss_entity = SpiderBoss(WIDTH//2, 20)
         player.spawn_point = vec(WIDTH//2, HEIGHT - 100)
 
     player.pos = vec(player.spawn_point)
 
-current_level = 1
-load_level(current_level)
-
+# Background Elements Initialization
 light_surface = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
 pygame.draw.polygon(light_surface, (255, 240, 150, 25), [(100, -50), (250, -50), (200, HEIGHT), (-50, HEIGHT)])
 pygame.draw.polygon(light_surface, (255, 240, 150, 20), [(450, -50), (600, -50), (550, HEIGHT), (300, HEIGHT)])
-
-# Background Elements
 clouds = [Cloud() for _ in range(3)] 
 bg_trees = [Tree(x, HEIGHT - 40, is_bg=True) for x in range(-50, WIDTH + 100, 120)]
 fg_trees = [Tree(x, HEIGHT - 40, is_bg=False) for x in range(80, WIDTH, 250)]
@@ -566,64 +562,182 @@ bats = [Bat() for _ in range(5)]
 stalactites = [Stalactite() for _ in range(10)]
 rock_tumblers = [RockTumbler() for _ in range(15)]
 
+# --- Game State Variables ---
+GAME_STATE = "SPLASH" # SPLASH, MENU, PLAYING
+current_level = 1
+splash_start_time = pygame.time.get_ticks()
+
+# Main Menu Variables
+btn_play = Button(WIDTH//2 - 100, HEIGHT//2 - 20, 200, 50, "PLAY")
+btn_levels = Button(WIDTH//2 - 100, HEIGHT//2 + 50, 200, 50, "LEVEL SELECT")
+btn_settings = Button(WIDTH//2 - 100, HEIGHT//2 + 120, 200, 50, "SETTINGS")
+menu_fade_alpha = 255
+menu_bg_timer = 0
+menu_scene_index = 0
+menu_scenes = [
+    {"sky": (100, 180, 210), "dirt": (86, 52, 24), "grass": (54, 180, 44)},   # Jungle
+    {"sky": (20, 20, 40), "dirt": (40, 30, 30), "grass": (20, 50, 40)},       # Cave Entrance
+    {"sky": (10, 10, 15), "dirt": (70, 70, 75), "grass": (50, 60, 50)}        # Deep Cave
+]
+
 # --- Main Game Loop ---
 running = True
 while running:
+    current_time = pygame.time.get_ticks()
+    
+    # 1. EVENT HANDLING
     for event in pygame.event.get():
         if event.type == pygame.QUIT: running = False
-        if event.type == pygame.KEYDOWN:
-            if event.key in (pygame.K_SPACE, pygame.K_UP, pygame.K_w): player.jump(platforms, vines)
-
-    if pygame.sprite.spritecollide(player, portals, False) and player.state == 'alive':
-        current_level += 1
-        if current_level > 6: current_level = 1 
-        load_level(current_level)
-
-    # We manually update hazards here so WebTraps can check for platforms
-    for h in hazards:
-        if isinstance(h, WebTrap): h.update(platforms)
-        else: h.update()
         
-    player.update(platforms, vines, hazards, projectiles, trampolines, boss_entity)
-    cannons.update(projectiles)
-    projectiles.update()
-    if boss_entity: boss_entity.update(hazards)
-    for npc in npcs: npc.update()
+        if GAME_STATE == "PLAYING":
+            if event.type == pygame.KEYDOWN:
+                if event.key in (pygame.K_SPACE, pygame.K_UP, pygame.K_w): player.jump(platforms, vines)
+                
+        elif GAME_STATE == "MENU":
+            if btn_play.is_clicked(event):
+                GAME_STATE = "PLAYING"
+                load_level(1)
+            # Level Select and Settings buttons act as placeholders for now!
 
-    # --- DRAWING ---
-    screen.fill(env_colors["sky"])
-    
-    if current_level < 5:
-        for cloud in clouds: cloud.update(); cloud.draw(screen)
-        for tree in bg_trees: tree.draw(screen)
-        for tree in fg_trees: tree.draw(screen)
-        screen.blit(light_surface, (0, 0))
-    else: # Levels 5 and 6 (Cave & Boss) now both get the living cave background!
-        for bat in bats: bat.update(); bat.draw(screen)
-        for stalactite in stalactites: stalactite.update(); stalactite.draw(screen)
-        for rt in rock_tumblers: rt.update(); rt.draw(screen)
-        dim_light = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-        dim_light.fill((50, 30, 10, 50))
-        screen.blit(dim_light, (0,0))
-    
-    if current_level == 4:
-        for s in scenery: screen.blit(s.image, s.rect)
-    
-    hazards.draw(screen)
-    vines.draw(screen)
-    trampolines.draw(screen)
-    platforms.draw(screen)
-    cannons.draw(screen)
-    projectiles.draw(screen)
-    
-    if boss_entity: boss_entity.draw(screen)
-    
-    for portal in portals: portal.draw(screen)
-    for npc in npcs:
-        screen.blit(npc.image, npc.rect)
-        npc.draw_tooltip(screen, player.pos) 
+    # 2. STATE LOGIC & DRAWING
+    if GAME_STATE == "SPLASH":
+        screen.fill((10, 10, 15)) # Dark background
+        title_surf = title_font.render("CUBE'S JOURNEY HOME", True, (255, 255, 255))
+        title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//2))
+        screen.blit(title_surf, title_rect)
+        
+        # After 2 seconds, switch to menu!
+        if current_time - splash_start_time > 2000:
+            GAME_STATE = "MENU"
+            menu_bg_timer = current_time
 
-    player.draw(screen)
+    elif GAME_STATE == "MENU":
+        # Cycle background environments every 2 seconds
+        if current_time - menu_bg_timer > 2000:
+            menu_bg_timer = current_time
+            menu_scene_index = (menu_scene_index + 1) % len(menu_scenes)
+            env_colors.update(menu_scenes[menu_scene_index])
+
+        # Draw Menu Background
+        screen.fill(env_colors["sky"])
+        
+        # Draw dynamic background based on the scene index
+        if menu_scene_index == 0: # Jungle
+            for cloud in clouds: cloud.update(); cloud.draw(screen)
+            for tree in bg_trees: tree.draw(screen)
+            for tree in fg_trees: tree.draw(screen)
+            screen.blit(light_surface, (0, 0))
+        elif menu_scene_index == 1: # Cave Entrance
+            # Simplified static entrance
+            pygame.draw.rect(screen, (10, 10, 15), (WIDTH//4, 0, WIDTH//2, HEIGHT)) 
+        else: # Deep Cave
+            for bat in bats: bat.update(); bat.draw(screen)
+            for stalactite in stalactites: stalactite.update(); stalactite.draw(screen)
+            dim_light = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            dim_light.fill((50, 30, 10, 50))
+            screen.blit(dim_light, (0,0))
+
+        # Draw a simple floor
+        pygame.draw.rect(screen, env_colors["dirt"], (0, HEIGHT - 40, WIDTH, 40))
+        pygame.draw.rect(screen, env_colors["grass"], (0, HEIGHT - 40, WIDTH, 10))
+
+        # Draw interactive Cube at the bottom center
+        player.rect.center = (WIDTH // 2, HEIGHT - 60)
+        
+        # Cube Eye tracks the mouse!
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+        dx, dy = mouse_x - player.rect.centerx, mouse_y - player.rect.centery
+        dist = math.hypot(dx, dy)
+        if dist > 0:
+            player.look_dir = vec(dx/dist, dy/dist)
+        
+        player.draw(screen)
+
+        # Draw UI
+        # Translucent overlay to make text readable
+        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 100))
+        screen.blit(overlay, (0, 0))
+
+        # Title
+        title_surf = title_font.render("CUBE'S JOURNEY HOME", True, (255, 255, 255))
+        title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//4))
+        screen.blit(title_surf, title_rect)
+
+        # Buttons
+        btn_play.draw(screen)
+        btn_levels.draw(screen)
+        btn_settings.draw(screen)
+
+        # Smooth Fade-In Effect when entering menu
+        if menu_fade_alpha > 0:
+            fade_surf = pygame.Surface((WIDTH, HEIGHT))
+            fade_surf.fill((10, 10, 15))
+            fade_surf.set_alpha(menu_fade_alpha)
+            screen.blit(fade_surf, (0, 0))
+            menu_fade_alpha = max(0, menu_fade_alpha - 5)
+
+    elif GAME_STATE == "PLAYING":
+        if pygame.sprite.spritecollide(player, portals, False) and player.state == 'alive':
+            current_level += 1
+            if current_level > 6: 
+                GAME_STATE = "MENU" # Win the game, go to menu!
+                menu_fade_alpha = 255 # Reset fade for transition
+            else:
+                load_level(current_level)
+
+        for h in hazards:
+            if isinstance(h, WebTrap): h.update(platforms)
+            else: h.update()
+            
+        player.update(platforms, vines, hazards, projectiles, trampolines, boss_entity)
+        cannons.update(projectiles)
+        projectiles.update()
+        if boss_entity: boss_entity.update(hazards)
+        for npc in npcs: npc.update()
+
+        # Update visuals
+        if current_level < 5:
+            for cloud in clouds: cloud.update()
+        else: 
+            for bat in bats: bat.update()
+            for stalactite in stalactites: stalactite.update()
+            for rt in rock_tumblers: rt.update()
+
+        screen.fill(env_colors["sky"])
+        
+        if current_level < 5:
+            for cloud in clouds: cloud.draw(screen)
+            for tree in bg_trees: tree.draw(screen)
+            for tree in fg_trees: tree.draw(screen)
+            screen.blit(light_surface, (0, 0))
+        else: 
+            for bat in bats: bat.draw(screen)
+            for stalactite in stalactites: stalactite.draw(screen)
+            for rt in rock_tumblers: rt.draw(screen)
+            dim_light = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            dim_light.fill((50, 30, 10, 50))
+            screen.blit(dim_light, (0,0))
+        
+        if current_level == 4:
+            for s in scenery: screen.blit(s.image, s.rect)
+        
+        hazards.draw(screen)
+        vines.draw(screen)
+        trampolines.draw(screen)
+        platforms.draw(screen)
+        cannons.draw(screen)
+        projectiles.draw(screen)
+        
+        if boss_entity: boss_entity.draw(screen)
+        
+        for portal in portals: portal.draw(screen)
+        for npc in npcs:
+            screen.blit(npc.image, npc.rect)
+            npc.draw_tooltip(screen, player.pos) 
+
+        player.draw(screen)
+
     pygame.display.flip()
     clock.tick(FPS)
 
