@@ -15,11 +15,38 @@ clock = pygame.time.Clock()
 
 vec = pygame.math.Vector2
 font = pygame.font.SysFont('Arial', 18, bold=True)
-title_font = pygame.font.SysFont('Arial', 48, bold=True) # New font for the victory screen
+title_font = pygame.font.SysFont('Arial', 48, bold=True)
+btn_font = pygame.font.SysFont('Arial', 24, bold=True)
 
 env_colors = {
     "sky": (100, 180, 210), "dirt": (86, 52, 24), "grass": (54, 180, 44)
 }
+
+# --- UI Classes ---
+class Button:
+    def __init__(self, x, y, w, h, text):
+        self.rect = pygame.Rect(x, y, w, h)
+        self.text = text
+        self.color = (60, 60, 70)
+        self.hover_color = (100, 150, 255)
+
+    def draw(self, surface):
+        mouse_pos = pygame.mouse.get_pos()
+        is_hovered = self.rect.collidepoint(mouse_pos)
+        current_color = self.hover_color if is_hovered else self.color
+        
+        pygame.draw.rect(surface, current_color, self.rect, border_radius=8)
+        pygame.draw.rect(surface, (30, 30, 35), self.rect.inflate(-6, -6), border_radius=6)
+        
+        text_surf = btn_font.render(self.text, True, current_color if is_hovered else (200, 200, 200))
+        text_rect = text_surf.get_rect(center=self.rect.center)
+        surface.blit(text_surf, text_rect)
+
+    def is_clicked(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.rect.collidepoint(event.pos):
+                return True
+        return False
 
 # --- Visual Effects Classes ---
 class Particle:
@@ -380,6 +407,7 @@ class Player(pygame.sprite.Sprite):
 
         if self.is_climbing: self.acc.y = 0
 
+        # X-AXIS
         if keys[pygame.K_LEFT] or keys[pygame.K_a]: self.acc.x, input_dir.x = -self.ACCEL, -1
         if keys[pygame.K_RIGHT] or keys[pygame.K_d]: self.acc.x, input_dir.x = self.ACCEL, 1
 
@@ -396,6 +424,7 @@ class Player(pygame.sprite.Sprite):
         if self.pos.x < self.width / 2: self.pos.x, self.vel.x = self.width / 2, self.vel.x * -0.5 
         elif self.pos.x > WIDTH - self.width / 2: self.pos.x, self.vel.x = WIDTH - self.width / 2, self.vel.x * -0.5 
 
+        # Y-AXIS
         if keys[pygame.K_UP] or keys[pygame.K_w]: input_dir.y = -1
         if keys[pygame.K_DOWN] or keys[pygame.K_s]: input_dir.y = 1
 
@@ -411,7 +440,7 @@ class Player(pygame.sprite.Sprite):
         for hit in pygame.sprite.spritecollide(self, trampolines, False):
             if self.vel.y > 0 and self.rect.bottom <= hit.rect.centery + 15: 
                 self.rect.bottom = hit.rect.top
-                self.vel.y = self.JUMP_POWER * 2.0
+                self.vel.y = self.JUMP_POWER * 2.0 # Extra boost for the boss!
                 self.is_climbing = False
             self.pos.y = self.rect.bottom
 
@@ -461,7 +490,6 @@ class Player(pygame.sprite.Sprite):
 player = Player()
 platforms, vines, hazards, trampolines, cannons, projectiles, npcs, portals, scenery = [pygame.sprite.Group() for _ in range(9)]
 boss_entity = None
-game_state = 'playing'
 
 def load_level(level_num):
     global boss_entity
@@ -520,6 +548,7 @@ def load_level(level_num):
         boss_entity = SpiderBoss(WIDTH//2, 20)
         player.spawn_point = vec(WIDTH//2, HEIGHT - 100)
 
+    # Syncing Partner's Levels!
     elif level_num == 7: 
         env_colors.update({"sky": (150, 200, 250), "dirt": (200, 200, 220), "grass": (220, 220, 250)}) 
         platforms.add(Platform(0, HEIGHT - 60, 100, 60), Platform(WIDTH - 100, HEIGHT - 60, 100, 60))
@@ -554,13 +583,10 @@ def load_level(level_num):
 
     player.pos = vec(player.spawn_point)
 
-current_level = 1
-load_level(current_level)
-
+# --- Background Environment Globals ---
 light_surface = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
 pygame.draw.polygon(light_surface, (255, 240, 150, 25), [(100, -50), (250, -50), (200, HEIGHT), (-50, HEIGHT)])
 pygame.draw.polygon(light_surface, (255, 240, 150, 20), [(450, -50), (600, -50), (550, HEIGHT), (300, HEIGHT)])
-
 clouds = [Cloud() for _ in range(3)] 
 bg_trees = [Tree(x, HEIGHT - 40, is_bg=True) for x in range(-50, WIDTH + 100, 120)]
 fg_trees = [Tree(x, HEIGHT - 40, is_bg=False) for x in range(80, WIDTH, 250)]
@@ -568,25 +594,120 @@ bats = [Bat() for _ in range(5)]
 stalactites = [Stalactite() for _ in range(10)]
 rock_tumblers = [RockTumbler() for _ in range(15)]
 
+# --- Game State Variables ---
+GAME_STATE = "SPLASH" # Includes: SPLASH, MENU, PLAYING, VICTORY
+current_level = 1
+splash_start_time = pygame.time.get_ticks()
+
+# Main Menu UI Setup
+btn_play = Button(WIDTH//2 - 100, HEIGHT//2 - 20, 200, 50, "PLAY")
+btn_levels = Button(WIDTH//2 - 100, HEIGHT//2 + 50, 200, 50, "LEVEL SELECT")
+btn_settings = Button(WIDTH//2 - 100, HEIGHT//2 + 120, 200, 50, "SETTINGS")
+menu_fade_alpha = 255
+menu_bg_timer = 0
+menu_scene_index = 0
+menu_scenes = [
+    {"sky": (100, 180, 210), "dirt": (86, 52, 24), "grass": (54, 180, 44)},   # Jungle
+    {"sky": (20, 20, 40), "dirt": (40, 30, 30), "grass": (20, 50, 40)},       # Cave Entrance
+    {"sky": (10, 10, 15), "dirt": (70, 70, 75), "grass": (50, 60, 50)}        # Deep Cave
+]
+
+load_level(current_level)
+
 # --- Main Game Loop ---
 running = True
 while running:
+    current_time = pygame.time.get_ticks()
+    
+    # 1. EVENT HANDLING
     for event in pygame.event.get():
         if event.type == pygame.QUIT: running = False
-        if event.type == pygame.KEYDOWN:
-            if game_state == 'playing':
+        
+        if GAME_STATE == "PLAYING":
+            if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_SPACE, pygame.K_UP, pygame.K_w): player.jump(platforms, vines)
-            elif game_state == 'victory':
-                if event.key == pygame.K_r:  # Press R to restart
+                
+        elif GAME_STATE == "MENU":
+            if btn_play.is_clicked(event):
+                GAME_STATE = "PLAYING"
+                current_level = 1
+                load_level(current_level)
+
+        elif GAME_STATE == "VICTORY":
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_r:  # Press R to play again synced!
                     current_level = 1
-                    game_state = 'playing'
+                    GAME_STATE = 'PLAYING'
                     load_level(current_level)
 
-    if game_state == 'playing':
+    # 2. STATE LOGIC & DRAWING
+    if GAME_STATE == "SPLASH":
+        screen.fill((10, 10, 15)) 
+        title_surf = title_font.render("CUBE'S JOURNEY HOME", True, (255, 255, 255))
+        title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//2))
+        screen.blit(title_surf, title_rect)
+        
+        if current_time - splash_start_time > 2000:
+            GAME_STATE = "MENU"
+            menu_bg_timer = current_time
+
+    elif GAME_STATE == "MENU":
+        if current_time - menu_bg_timer > 2000:
+            menu_bg_timer = current_time
+            menu_scene_index = (menu_scene_index + 1) % len(menu_scenes)
+            env_colors.update(menu_scenes[menu_scene_index])
+
+        screen.fill(env_colors["sky"])
+        
+        if menu_scene_index == 0: 
+            for cloud in clouds: cloud.update(); cloud.draw(screen)
+            for tree in bg_trees: tree.draw(screen)
+            for tree in fg_trees: tree.draw(screen)
+            screen.blit(light_surface, (0, 0))
+        elif menu_scene_index == 1: 
+            pygame.draw.rect(screen, (10, 10, 15), (WIDTH//4, 0, WIDTH//2, HEIGHT)) 
+        else: 
+            for bat in bats: bat.update(); bat.draw(screen)
+            for stalactite in stalactites: stalactite.update(); stalactite.draw(screen)
+            dim_light = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            dim_light.fill((50, 30, 10, 50))
+            screen.blit(dim_light, (0,0))
+
+        pygame.draw.rect(screen, env_colors["dirt"], (0, HEIGHT - 40, WIDTH, 40))
+        pygame.draw.rect(screen, env_colors["grass"], (0, HEIGHT - 40, WIDTH, 10))
+
+        player.rect.center = (WIDTH // 2, HEIGHT - 60)
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+        dx, dy = mouse_x - player.rect.centerx, mouse_y - player.rect.centery
+        dist = math.hypot(dx, dy)
+        if dist > 0:
+            player.look_dir = vec(dx/dist, dy/dist)
+        player.draw(screen)
+
+        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 100))
+        screen.blit(overlay, (0, 0))
+
+        title_surf = title_font.render("CUBE'S JOURNEY HOME", True, (255, 255, 255))
+        title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//4))
+        screen.blit(title_surf, title_rect)
+
+        btn_play.draw(screen)
+        btn_levels.draw(screen)
+        btn_settings.draw(screen)
+
+        if menu_fade_alpha > 0:
+            fade_surf = pygame.Surface((WIDTH, HEIGHT))
+            fade_surf.fill((10, 10, 15))
+            fade_surf.set_alpha(menu_fade_alpha)
+            screen.blit(fade_surf, (0, 0))
+            menu_fade_alpha = max(0, menu_fade_alpha - 5)
+
+    elif GAME_STATE == "PLAYING":
         if pygame.sprite.spritecollide(player, portals, False) and player.state == 'alive':
             current_level += 1
-            if current_level > 9: 
-                game_state = 'victory'
+            if current_level > 9: # Updated to trigger Victory after level 9! 
+                GAME_STATE = "VICTORY"
             else:
                 load_level(current_level)
 
@@ -600,8 +721,7 @@ while running:
         if boss_entity: boss_entity.update(hazards)
         for npc in npcs: npc.update()
 
-    # --- DRAWING ---
-    if game_state == 'playing':
+        # Updated drawing logic to account for the new levels!
         screen.fill(env_colors["sky"])
         
         if current_level < 5 or current_level > 6:
@@ -635,17 +755,15 @@ while running:
             npc.draw_tooltip(screen, player.pos) 
 
         player.draw(screen)
+
+    elif GAME_STATE == "VICTORY":
+        # The Golden Celebration screen!
+        screen.fill((255, 215, 0)) 
         
-    elif game_state == 'victory':
-        # Draw the victory screen
-        screen.fill((255, 215, 0)) # Golden celebration background
-        
-        # Render Texts
         title_text = title_font.render("VICTORY!", True, (255, 255, 255))
         subtitle_text = font.render("Cube has finally returned home!", True, (0, 0, 0))
         restart_text = font.render("Press 'R' to play again", True, (50, 50, 50))
         
-        # Draw Texts
         screen.blit(title_text, title_text.get_rect(center=(WIDTH//2, HEIGHT//2 - 50)))
         screen.blit(subtitle_text, subtitle_text.get_rect(center=(WIDTH//2, HEIGHT//2 + 10)))
         screen.blit(restart_text, restart_text.get_rect(center=(WIDTH//2, HEIGHT//2 + 50)))
@@ -654,5 +772,4 @@ while running:
     clock.tick(FPS)
 
 pygame.quit()
-
 sys.exit()
