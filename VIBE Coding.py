@@ -988,6 +988,7 @@ available_colors = [
     {"id": "GREEN", "name": "FOREST GREEN", "color": (40, 150, 50), "cost": 10},
     {"id": "BLUE", "name": "OCEAN BLUE", "color": (40, 80, 180), "cost": 10},
     {"id": "PURPLE", "name": "ROYAL PURPLE", "color": (120, 40, 180), "cost": 10},
+    {"id": "YELLOW", "name": "LEMON YELLOW", "color": (255, 255, 60), "cost": 10},
     {"id": "RAINBOW", "name": "RAINBOW", "color": "RAINBOW", "cost": 50},
     {"id": "BW_GRADIENT", "name": "B/W GRADIENT", "color": "BW_GRADIENT", "cost": 50}
 ]
