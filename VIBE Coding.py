@@ -290,12 +290,30 @@ class NPC(pygame.sprite.Sprite):
 class Projectile(pygame.sprite.Sprite):
     def __init__(self, x, y, dir_x):
         super().__init__()
-        self.image = pygame.Surface((40, 20), pygame.SRCALPHA)
-        pygame.draw.ellipse(self.image, (255, 100, 0, 100), (0, 0, 40, 20)) 
-        pygame.draw.ellipse(self.image, (255, 150, 0), (5, 5, 30, 10))
-        pygame.draw.ellipse(self.image, (255, 255, 255), (10, 7, 20, 6))
+        
+        w, h = 120, 20
+        base = pygame.Surface((w, h), pygame.SRCALPHA)
+        
+        # Tail fading out to the left, glowing head on the right
+        pygame.draw.ellipse(base, (80, 0, 180, 20), (0, 5, 100, 10))
+        pygame.draw.ellipse(base, (120, 0, 220, 40), (20, 6, 90, 8))
+        pygame.draw.ellipse(base, (180, 50, 255, 80), (40, 7, 75, 6))
+        pygame.draw.ellipse(base, (220, 100, 255, 150), (60, 8, 50, 4))
+        pygame.draw.ellipse(base, (255, 200, 255, 255), (80, 9, 30, 2))
+        
+        # Plasma fuzz along the beam
+        for _ in range(25):
+            px = random.randint(20, 110)
+            py = random.randint(5, 15)
+            pygame.draw.circle(base, (200, 100, 255, 60), (px, py), random.randint(1, 3))
+            
+        if dir_x == -1:
+            self.image = pygame.transform.flip(base, True, False)
+        else:
+            self.image = base
+            
         self.rect = self.image.get_rect(center=(x, y))
-        self.vx = 7 * dir_x 
+        self.vx = 10 * dir_x # Slight speed boost for the laser
     def update(self):
         self.rect.x += self.vx
         if self.rect.right < -100 or self.rect.left > WIDTH + 100: self.kill()
@@ -304,7 +322,9 @@ class Cannon(pygame.sprite.Sprite):
     def __init__(self, x, y, dir_x, offset=0):
         super().__init__()
         self.image = pygame.Surface((40, 30), pygame.SRCALPHA)
+        # Simple Gray Cannon
         pygame.draw.rect(self.image, (60, 60, 65), (0, 0, 40, 30), border_radius=5)
+        
         self.rect = self.image.get_rect(topleft=(x, y))
         self.dir_x, self.spawn_offset = dir_x, 45 if dir_x == 1 else -15
         self.last_shot = pygame.time.get_ticks() - offset 
@@ -603,6 +623,30 @@ splash_start_time = pygame.time.get_ticks()
 btn_play = Button(WIDTH//2 - 100, HEIGHT//2 - 20, 200, 50, "PLAY")
 btn_levels = Button(WIDTH//2 - 100, HEIGHT//2 + 50, 200, 50, "LEVEL SELECT")
 btn_settings = Button(WIDTH//2 - 100, HEIGHT//2 + 120, 200, 50, "SETTINGS")
+
+# Level Select UI Setup
+level_btns = []
+for i in range(9):
+    level_btns.append(Button(WIDTH//2 - 170 + (i%3)*130, HEIGHT//2 - 60 + (i//3)*70, 90, 40, f"LEVEL {i+1}"))
+btn_back_ls = Button(WIDTH//2 - 100, HEIGHT - 100, 200, 50, "BACK")
+
+boss_levels = [6]
+skull_img = pygame.Surface((16, 16), pygame.SRCALPHA)
+pygame.draw.rect(skull_img, (220, 220, 230), (0, 0, 16, 12), border_radius=4)
+pygame.draw.rect(skull_img, (220, 220, 230), (4, 12, 8, 4))
+pygame.draw.rect(skull_img, (30, 30, 35), (3, 4, 4, 4))
+pygame.draw.rect(skull_img, (30, 30, 35), (9, 4, 4, 4))
+pygame.draw.rect(skull_img, (30, 30, 35), (7, 9, 2, 2))
+pygame.draw.line(skull_img, (30, 30, 35), (6, 12), (6, 15))
+pygame.draw.line(skull_img, (30, 30, 35), (8, 12), (8, 15))
+pygame.draw.line(skull_img, (30, 30, 35), (10, 12), (10, 15))
+
+# Settings UI Setup
+is_music_on = True
+is_sound_on = True
+btn_music = Button(WIDTH//2 - 100, HEIGHT//2 - 50, 200, 50, "MUSIC: ON")
+btn_sound = Button(WIDTH//2 - 100, HEIGHT//2 + 20, 200, 50, "SOUND: ON")
+btn_back_st = Button(WIDTH//2 - 100, HEIGHT - 100, 200, 50, "BACK")
 menu_fade_alpha = 255
 menu_bg_timer = 0
 menu_scene_index = 0
@@ -632,6 +676,30 @@ while running:
                 GAME_STATE = "PLAYING"
                 current_level = 1
                 load_level(current_level)
+            elif btn_levels.is_clicked(event):
+                GAME_STATE = "LEVEL_SELECT"
+            elif btn_settings.is_clicked(event):
+                GAME_STATE = "SETTINGS"
+                
+        elif GAME_STATE == "LEVEL_SELECT":
+            if btn_back_ls.is_clicked(event):
+                GAME_STATE = "MENU"
+            else:
+                for i, btn in enumerate(level_btns):
+                    if btn.is_clicked(event):
+                        GAME_STATE = "PLAYING"
+                        current_level = i + 1
+                        load_level(current_level)
+                        
+        elif GAME_STATE == "SETTINGS":
+            if btn_back_st.is_clicked(event):
+                GAME_STATE = "MENU"
+            elif btn_music.is_clicked(event):
+                is_music_on = not is_music_on
+                btn_music.text = "MUSIC: ON" if is_music_on else "MUSIC: OFF"
+            elif btn_sound.is_clicked(event):
+                is_sound_on = not is_sound_on
+                btn_sound.text = "SOUND: ON" if is_sound_on else "SOUND: OFF"
 
         elif GAME_STATE == "VICTORY":
             if event.type == pygame.KEYDOWN:
@@ -702,6 +770,30 @@ while running:
             fade_surf.set_alpha(menu_fade_alpha)
             screen.blit(fade_surf, (0, 0))
             menu_fade_alpha = max(0, menu_fade_alpha - 5)
+
+    elif GAME_STATE == "LEVEL_SELECT":
+        screen.fill((20, 20, 30))
+        title_surf = title_font.render("SELECT LEVEL", True, (255, 255, 255))
+        title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//4 - 20))
+        screen.blit(title_surf, title_rect)
+        
+        for i, btn in enumerate(level_btns):
+            btn.draw(screen)
+            if i + 1 in boss_levels:
+                # Draw skull badge slightly overlapping the top-right corner
+                screen.blit(skull_img, (btn.rect.right - 10, btn.rect.top - 8))
+                
+        btn_back_ls.draw(screen)
+
+    elif GAME_STATE == "SETTINGS":
+        screen.fill((20, 20, 30))
+        title_surf = title_font.render("SETTINGS", True, (255, 255, 255))
+        title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//4 - 20))
+        screen.blit(title_surf, title_rect)
+        
+        btn_music.draw(screen)
+        btn_sound.draw(screen)
+        btn_back_st.draw(screen)
 
     elif GAME_STATE == "PLAYING":
         if pygame.sprite.spritecollide(player, portals, False) and player.state == 'alive':
