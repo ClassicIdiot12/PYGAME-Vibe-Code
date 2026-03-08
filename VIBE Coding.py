@@ -120,6 +120,13 @@ class LevelButton(Button):
             pygame.draw.rect(self.bg_surface, (255, 100, 0), (0, h - 25, w, 25)) # Lava
             pygame.draw.circle(self.bg_surface, (255, 150, 0), (w//4, h - 25), 8) # Lava bubble
 
+        elif self.level_num in [10, 11, 12]: # Zombie Graveyard
+            self.bg_surface.fill((20, 30, 20))
+            pygame.draw.rect(self.bg_surface, (40, 50, 40), (0, h - 20, w, 20))
+            pygame.draw.rect(self.bg_surface, (100, 100, 100), (w//2 - 10, h - 35, 20, 20), border_radius=4)
+            if self.level_num == 10:
+                pygame.draw.circle(self.bg_surface, (255, 0, 0), (w//2, h//3), 6) # Mini boss eye
+
     def draw(self, surface):
         mouse_pos = pygame.mouse.get_pos()
         is_hovered = self.rect.collidepoint(mouse_pos)
@@ -358,6 +365,95 @@ class Trampoline(pygame.sprite.Sprite):
         pygame.draw.ellipse(self.image, (200, 255, 255), (w//4, h//4, w//2, h//2))
         self.rect = self.image.get_rect(topleft=(x, y))
 
+class Zombie(pygame.sprite.Sprite):
+    def __init__(self, x, y, walk_dist=100):
+        super().__init__()
+        self.image = pygame.Surface((40, 40), pygame.SRCALPHA)
+        pygame.draw.rect(self.image, (50, 100, 50), (10, 15, 20, 25), border_radius=4)
+        pygame.draw.rect(self.image, (70, 150, 70), (5, 0, 30, 20), border_radius=6)
+        pygame.draw.rect(self.image, (255, 50, 50), (10, 5, 6, 4))
+        pygame.draw.rect(self.image, (255, 50, 50), (24, 5, 6, 4))
+        self.rect = self.image.get_rect(midbottom=(x, y))
+        self.start_x = x
+        self.walk_dist = walk_dist
+        self.vx = 1.5
+        self.hp = 2
+        self.is_dead = False
+        self.i_frames = 0
+
+    def update(self):
+        if self.is_dead: return
+        self.rect.x += self.vx
+        if abs(self.rect.centerx - self.start_x) > self.walk_dist:
+            self.vx *= -1
+
+    def take_damage(self):
+        current_time = pygame.time.get_ticks()
+        if current_time - self.i_frames > 500:
+            self.hp -= 1
+            self.i_frames = current_time
+            self.vx *= 1.2
+            if self.hp <= 0:
+                self.is_dead = True
+                self.kill()
+                return True
+        return False
+
+    def draw(self, surface):
+        if self.is_dead: return
+        if pygame.time.get_ticks() - self.i_frames < 200:
+            flash_img = self.image.copy()
+            flash_img.fill((255, 255, 255, 150), special_flags=pygame.BLEND_RGBA_MULT)
+            surface.blit(flash_img, self.rect)
+        else:
+            surface.blit(self.image, self.rect)
+
+class ZombieBoss(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = pygame.Surface((80, 80), pygame.SRCALPHA)
+        pygame.draw.rect(self.image, (40, 80, 40), (20, 20, 40, 60), border_radius=5)
+        pygame.draw.rect(self.image, (60, 120, 60), (10, 0, 60, 40), border_radius=10)
+        pygame.draw.rect(self.image, (255, 0, 0), (20, 10, 10, 10))
+        pygame.draw.rect(self.image, (255, 0, 0), (50, 10, 10, 10))
+        self.rect = self.image.get_rect(midbottom=(x, y))
+        self.vx = 2
+        self.max_hp = 5
+        self.hp = self.max_hp
+        self.last_attack = pygame.time.get_ticks()
+        self.is_dead = False
+        self.i_frames = 0
+
+    def update(self, hazards_group):
+        if self.is_dead: return
+        self.rect.x += self.vx
+        if self.rect.right > WIDTH - 50 or self.rect.left < 50:
+            self.vx *= -1
+            
+    def take_damage(self):
+        current_time = pygame.time.get_ticks()
+        if current_time - self.i_frames > 1000: 
+            self.hp -= 1
+            self.i_frames = current_time
+            self.vx *= 1.2 
+            if self.hp <= 0:
+                self.is_dead = True
+                self.kill()
+                return True 
+        return False
+
+    def draw(self, surface):
+        if self.is_dead: return
+        if pygame.time.get_ticks() - self.i_frames < 200:
+            flash_img = self.image.copy()
+            flash_img.fill((255, 255, 255, 150), special_flags=pygame.BLEND_RGBA_MULT)
+            surface.blit(flash_img, self.rect)
+        else:
+            surface.blit(self.image, self.rect)
+        hp_width = 80
+        pygame.draw.rect(surface, (100, 100, 100), (self.rect.centerx - hp_width//2, self.rect.top - 20, hp_width, 10))
+        pygame.draw.rect(surface, (50, 255, 50), (self.rect.centerx - hp_width//2, self.rect.top - 20, hp_width * (self.hp/self.max_hp), 10))
+
 # --- Environment & Standard Classes ---
 class Cloud:
     def __init__(self):
@@ -539,6 +635,11 @@ class Player(pygame.sprite.Sprite):
         self.state, self.death_timer, self.invincible_timer = 'alive', 0, 0
         self.color = "DEFAULT"
         self.particles = []
+        
+        self.has_dagger = False
+        self.is_attacking = False
+        self.attack_timer = 0
+        self.attack_cooldown = 0
 
     def trigger_death(self):
         if self.state == 'alive':
@@ -569,9 +670,17 @@ class Player(pygame.sprite.Sprite):
         keys = pygame.key.get_pressed()
         input_dir, self.acc = vec(0, 0), vec(0, self.GRAVITY)
         
-        ascend = keys[pygame.K_SPACE] or keys[pygame.K_UP] or keys[pygame.K_w]
+        ascend = keys[pygame.K_UP] or keys[pygame.K_w]
         descend = keys[pygame.K_DOWN] or keys[pygame.K_s]
         moving_horizontally = keys[pygame.K_LEFT] or keys[pygame.K_a] or keys[pygame.K_RIGHT] or keys[pygame.K_d]
+        
+        if self.has_dagger and keys[pygame.K_SPACE] and current_time - self.attack_cooldown > 500:
+            self.is_attacking = True
+            self.attack_timer = current_time
+            self.attack_cooldown = current_time
+            
+        if self.is_attacking and current_time - self.attack_timer > 200:
+            self.is_attacking = False
         
         if pygame.sprite.spritecollide(self, vines, False):
             if ascend and not moving_horizontally: self.is_climbing, self.vel.y = True, -self.CLIMB_SPEED
@@ -623,9 +732,22 @@ class Player(pygame.sprite.Sprite):
                 if self.vel.y > 0 and self.rect.bottom < boss.rect.centery:
                     boss_died = boss.take_damage()
                     self.vel.y = self.JUMP_POWER * 1.2 
-                    if boss_died: portals.add(Portal(WIDTH//2, HEIGHT - 60)) 
+                    if boss_died: 
+                        portals.add(Portal(WIDTH//2, HEIGHT - 60)) 
+                        if isinstance(boss, ZombieBoss):
+                            self.has_dagger = True
                 elif current_time - self.invincible_timer > 2000:
                     self.trigger_death() 
+
+        for z in zombies:
+            if not z.is_dead:
+                if self.is_attacking:
+                    attack_rect = pygame.Rect(self.rect.centerx, self.rect.y - 10, 40, 60)
+                    if self.look_dir.x < 0: attack_rect.x -= 40
+                    if attack_rect.colliderect(z.rect):
+                        z.take_damage()
+                if self.rect.colliderect(z.rect) and current_time - self.invincible_timer > 2000:
+                    self.trigger_death()
 
         if self.pos.y > HEIGHT + 50: self.trigger_death()
 
@@ -673,16 +795,33 @@ class Player(pygame.sprite.Sprite):
         pygame.draw.circle(surface, (255, 255, 255), (c_x + e_x, c_y + e_y), 14)
         pygame.draw.circle(surface, (0, 0, 0), (c_x + e_x * 1.8, c_y + e_y * 1.8), 6)
 
+        if self.has_dagger:
+            dagger_x = self.rect.right if self.look_dir.x >= 0 else self.rect.left
+            if self.is_attacking:
+                swipe_start = math.pi/4 if self.look_dir.x >= 0 else math.pi*0.75
+                swipe_end = -math.pi/4 if self.look_dir.x >= 0 else math.pi*1.25
+                arc_rect = pygame.Rect(self.rect.centerx - 30, self.rect.y - 10, 60, 60)
+                if self.look_dir.x >= 0:
+                    pygame.draw.arc(surface, (200, 200, 200), arc_rect, swipe_end, swipe_start, 4)
+                else:
+                    pygame.draw.arc(surface, (200, 200, 200), arc_rect, swipe_start, swipe_end, 4)
+            else:
+                pygame.draw.line(surface, (150, 150, 150), (dagger_x, c_y + 5), (dagger_x + (5 * self.look_dir.x), c_y + 15), 3)
+                pygame.draw.line(surface, (100, 50, 20), (dagger_x, c_y + 5), (dagger_x - (2 * self.look_dir.x), c_y), 3)
+
 # --- Level Manager ---
 player = Player()
-platforms, vines, hazards, trampolines, cannons, projectiles, npcs, portals, scenery = [pygame.sprite.Group() for _ in range(9)]
+platforms, vines, hazards, trampolines, cannons, projectiles, npcs, portals, scenery, zombies = [pygame.sprite.Group() for _ in range(10)]
 boss_entity = None
 
 def load_level(level_num):
     global boss_entity
-    for g in [platforms, vines, hazards, trampolines, cannons, projectiles, npcs, portals, scenery]: g.empty()
+    for g in [platforms, vines, hazards, trampolines, cannons, projectiles, npcs, portals, scenery, zombies]: g.empty()
     boss_entity = None
     
+    if level_num > 10:
+        player.has_dagger = True
+        
     if level_num == 1:
         env_colors.update({"sky": (100, 180, 210), "dirt": (86, 52, 24), "grass": (54, 180, 44)})
         platforms.add(Platform(0, HEIGHT - 60, WIDTH, 60), Platform(200, 460, 120, 30), Platform(420, 380, 150, 30), Platform(650, 300, 100, 30))
@@ -768,6 +907,29 @@ def load_level(level_num):
         portals.add(Portal(WIDTH - 50, 80))
         player.spawn_point = vec(50, HEIGHT - 100)
 
+    elif level_num == 10:
+        env_colors.update({"sky": (20, 30, 20), "dirt": (40, 50, 40), "grass": (20, 40, 20)})
+        platforms.add(Platform(0, HEIGHT - 60, WIDTH, 60))
+        boss_entity = ZombieBoss(WIDTH//2, HEIGHT - 60)
+        npcs.add(NPC(100, HEIGHT - 110, "A huge zombie! Defeat it to get its dagger!"))
+        player.spawn_point = vec(50, HEIGHT - 100)
+
+    elif level_num == 11:
+        env_colors.update({"sky": (30, 20, 40), "dirt": (50, 40, 50), "grass": (30, 20, 30)})
+        platforms.add(Platform(0, HEIGHT - 60, WIDTH, 60))
+        zombies.add(Zombie(300, HEIGHT - 60, 50), Zombie(500, HEIGHT - 60, 50))
+        npcs.add(NPC(100, HEIGHT - 110, "Use SPACE to swing your dagger at zombies!"))
+        portals.add(Portal(WIDTH - 50, HEIGHT - 60))
+        player.spawn_point = vec(50, HEIGHT - 100)
+
+    elif level_num == 12:
+        env_colors.update({"sky": (40, 20, 20), "dirt": (50, 30, 30), "grass": (30, 10, 10)})
+        platforms.add(Platform(0, HEIGHT - 60, 200, 60), Platform(300, HEIGHT - 60, 200, 60), Platform(600, HEIGHT - 60, 200, 60))
+        hazards.add(Hazard(200, HEIGHT - 30, 100, 30), Hazard(500, HEIGHT - 30, 100, 30))
+        zombies.add(Zombie(400, HEIGHT - 60, 40), Zombie(700, HEIGHT - 60, 40))
+        portals.add(Portal(WIDTH - 50, HEIGHT - 60))
+        player.spawn_point = vec(50, HEIGHT - 100)
+
     player.pos = vec(player.spawn_point)
 
 # --- Background Environment Globals ---
@@ -800,15 +962,15 @@ btn_settings = Button(WIDTH//2 - 100, HEIGHT//2 + 120, 200, 50, "SETTINGS")
 
 # Level Select UI Setup
 level_btns = []
-columns = 3
-button_w, button_h = 150, 100
-spacing_x, spacing_y = 180, 120
-start_x = WIDTH//2 - (spacing_x * 1)
-start_y = HEIGHT//2 - (spacing_y * 1) - 40 
+columns = 4
+button_w, button_h = 100, 80
+spacing_x, spacing_y = 140, 110
+start_x = WIDTH//2 - (spacing_x * 1.5)
+start_y = HEIGHT//2 - (spacing_y * 1) - 20 
 
-for i in range(9):
+for i in range(12):
     level_btns.append(LevelButton(start_x + (i%columns)*spacing_x - button_w//2, start_y + (i//columns)*spacing_y, button_w, button_h, i+1))
-btn_back_ls = Button(WIDTH//2 - 100, HEIGHT - 70, 200, 50, "BACK")
+btn_back_ls = Button(WIDTH//2 - 100, HEIGHT - 60, 200, 50, "BACK")
 
 # Settings UI Setup
 is_music_on = True
@@ -899,7 +1061,7 @@ while running:
         
         elif GAME_STATE == "PLAYING":
             if event.type == pygame.KEYDOWN:
-                if event.key in (pygame.K_SPACE, pygame.K_UP, pygame.K_w): player.jump(platforms, vines)
+                if event.key in (pygame.K_UP, pygame.K_w): player.jump(platforms, vines)
                 if event.key == pygame.K_ESCAPE: GAME_STATE = "PAUSED"
             if btn_pause.is_clicked(event):
                 GAME_STATE = "PAUSED"
@@ -1089,7 +1251,7 @@ while running:
                     accounts_db[current_user]["coins"] = total_coins
                     save_accounts(accounts_db)
                     
-                if current_level > 9: 
+                if current_level > 12: 
                     GAME_STATE = "VICTORY"
                 else:
                     load_level(current_level)
@@ -1101,6 +1263,7 @@ while running:
             player.update(platforms, vines, hazards, projectiles, trampolines, boss_entity)
             cannons.update(projectiles)
             projectiles.update()
+            zombies.update()
             if boss_entity: boss_entity.update(hazards)
             for npc in npcs: npc.update()
 
@@ -1129,6 +1292,7 @@ while running:
         platforms.draw(screen)
         cannons.draw(screen)
         projectiles.draw(screen)
+        zombies.draw(screen)
         
         if boss_entity: boss_entity.draw(screen)
         
