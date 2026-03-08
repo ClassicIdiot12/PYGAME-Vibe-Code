@@ -48,6 +48,84 @@ class Button:
                 return True
         return False
 
+class LevelButton(Button):
+    def __init__(self, x, y, w, h, level_num):
+        super().__init__(x, y, w, h, f"LEVEL {level_num}")
+        self.level_num = level_num
+        self.bg_surface = pygame.Surface((w, h))
+        self.generate_texture(w, h)
+        
+    def generate_texture(self, w, h):
+        # Base colors based on biome logic from load_level
+        if self.level_num in [1, 2]: # Jungle
+            self.bg_surface.fill((100, 180, 210)) # Sky
+            pygame.draw.rect(self.bg_surface, (86, 52, 24), (0, h//2, w, h//2)) # Dirt
+            pygame.draw.rect(self.bg_surface, (54, 180, 44), (0, h//2, w, 15)) # Grass
+            # Add some leaves/trees
+            pygame.draw.circle(self.bg_surface, (34, 139, 34), (w//4, h//2), 20)
+            pygame.draw.circle(self.bg_surface, (34, 139, 34), (w*3//4, h//2 - 10), 25)
+            
+        elif self.level_num == 3: # Toxic
+            self.bg_surface.fill((30, 50, 70))
+            pygame.draw.rect(self.bg_surface, (60, 40, 20), (0, h//2 + 10, w, h//2))
+            pygame.draw.rect(self.bg_surface, (100, 255, 50), (0, h - 20, w, 20)) # Sludge
+            
+        elif self.level_num in [4, 5]: # Caves
+            self.bg_surface.fill((20, 20, 40) if self.level_num == 4 else (10, 10, 15))
+            pygame.draw.rect(self.bg_surface, (40, 30, 30) if self.level_num == 4 else (70, 70, 75), (0, h//2 + 10, w, h//2))
+            # Stalactites
+            pygame.draw.polygon(self.bg_surface, (50, 50, 55), [(w//4, 0), (w//4+20, 0), (w//4+10, h//3)])
+            pygame.draw.polygon(self.bg_surface, (50, 50, 55), [(w*3//4, 0), (w*3//4+15, 0), (w*3//4+7, h//4)])
+            
+        elif self.level_num == 6: # Spider Boss
+            self.bg_surface.fill((5, 5, 10))
+            pygame.draw.rect(self.bg_surface, (40, 40, 45), (0, h//2 - 10, w, h//2 + 10))
+            # Web lines
+            pygame.draw.line(self.bg_surface, (150, 150, 150), (0, 0), (w, h//2), 2)
+            pygame.draw.line(self.bg_surface, (150, 150, 150), (w, 0), (0, h//2), 2)
+            pygame.draw.circle(self.bg_surface, (130, 60, 160), (w//2, h//3), 15) # Mini boss body
+            
+        elif self.level_num in [7, 8]: # Sky Ruins
+            self.bg_surface.fill((150, 200, 250) if self.level_num == 7 else (40, 80, 40))
+            pygame.draw.rect(self.bg_surface, (200, 200, 220) if self.level_num == 7 else (60, 40, 20), (0, h - 30, w, 30))
+            # Clouds
+            pygame.draw.circle(self.bg_surface, (255, 255, 255), (w//3, h//4), 15)
+            pygame.draw.circle(self.bg_surface, (255, 255, 255), (w//3 + 15, h//4 - 5), 20)
+            pygame.draw.circle(self.bg_surface, (255, 255, 255), (w//3 + 30, h//4), 15)
+            
+        elif self.level_num == 9: # Volcano Final
+            self.bg_surface.fill((50, 20, 20))
+            pygame.draw.rect(self.bg_surface, (30, 10, 10), (0, h//2, w, h//2))
+            pygame.draw.rect(self.bg_surface, (255, 100, 0), (0, h - 25, w, 25)) # Lava
+            pygame.draw.circle(self.bg_surface, (255, 150, 0), (w//4, h - 25), 8) # Lava bubble
+
+    def draw(self, surface):
+        mouse_pos = pygame.mouse.get_pos()
+        is_hovered = self.rect.collidepoint(mouse_pos)
+        
+        # Draw the custom background scaled to current draw size
+        scaled_bg = pygame.transform.scale(self.bg_surface, (self.rect.width - 6, self.rect.height - 6))
+        
+        # Draw frame
+        pygame.draw.rect(surface, (200, 200, 200) if is_hovered else (50, 50, 60), self.rect, border_radius=8)
+        
+        # Blit the custom background inside the frame
+        surface.blit(scaled_bg, (self.rect.x + 3, self.rect.y + 3))
+        
+        # Darken if out of focus (not hovered)
+        if not is_hovered:
+            dark_overlay = pygame.Surface((self.rect.width - 6, self.rect.height - 6), pygame.SRCALPHA)
+            dark_overlay.fill((0, 0, 0, 100))
+            surface.blit(dark_overlay, (self.rect.x + 3, self.rect.y + 3))
+        
+        # Draw text with shadow for readability
+        text_surf = btn_font.render(self.text, True, (255, 255, 255))
+        shadow_surf = btn_font.render(self.text, True, (0, 0, 0))
+        text_rect = text_surf.get_rect(center=self.rect.center)
+        
+        surface.blit(shadow_surf, (text_rect.x + 2, text_rect.y + 2))
+        surface.blit(text_surf, text_rect)
+
 # --- Visual Effects Classes ---
 class Particle:
     def __init__(self, x, y, color):
@@ -606,9 +684,15 @@ btn_settings = Button(WIDTH//2 - 100, HEIGHT//2 + 120, 200, 50, "SETTINGS")
 
 # Level Select UI Setup
 level_btns = []
+columns = 3
+button_w, button_h = 150, 100
+spacing_x, spacing_y = 180, 120
+start_x = WIDTH//2 - (spacing_x * 1)
+start_y = HEIGHT//2 - (spacing_y * 1) - 40 
+
 for i in range(9):
-    level_btns.append(Button(WIDTH//2 - 170 + (i%3)*130, HEIGHT//2 - 60 + (i//3)*70, 90, 40, f"LEVEL {i+1}"))
-btn_back_ls = Button(WIDTH//2 - 100, HEIGHT - 100, 200, 50, "BACK")
+    level_btns.append(LevelButton(start_x + (i%columns)*spacing_x - button_w//2, start_y + (i//columns)*spacing_y, button_w, button_h, i+1))
+btn_back_ls = Button(WIDTH//2 - 100, HEIGHT - 70, 200, 50, "BACK")
 
 # Settings UI Setup
 is_music_on = True
@@ -743,7 +827,7 @@ while running:
     elif GAME_STATE == "LEVEL_SELECT":
         screen.fill((20, 20, 30))
         title_surf = title_font.render("SELECT LEVEL", True, (255, 255, 255))
-        title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//4 - 20))
+        title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//8))
         screen.blit(title_surf, title_rect)
         
         for btn in level_btns:
