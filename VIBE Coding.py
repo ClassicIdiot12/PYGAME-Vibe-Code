@@ -45,11 +45,11 @@ current_user = None
 
 # --- UI Classes ---
 class Button:
-    def __init__(self, x, y, w, h, text):
+    def __init__(self, x, y, w, h, text, color=(60, 60, 70), hover_color=(100, 150, 255)):
         self.rect = pygame.Rect(x, y, w, h)
         self.text = text
-        self.color = (60, 60, 70)
-        self.hover_color = (100, 150, 255)
+        self.color = color
+        self.hover_color = hover_color
 
     def draw(self, surface):
         mouse_pos = pygame.mouse.get_pos()
@@ -139,6 +139,47 @@ class LevelButton(Button):
         
         # Blit the custom background inside the frame
         surface.blit(scaled_bg, (self.rect.x + 3, self.rect.y + 3))
+
+        # Animation: Mini Player runs across when hovered
+        if is_hovered:
+            progress = (pygame.time.get_ticks() % 1500) / 1500.0
+            p_size = 15
+            p_x = self.rect.x + 3 + int(progress * (self.rect.width - 6 - p_size))
+            p_y = self.rect.bottom - 30
+
+            # Determine color based on global player
+            base_color = (255, 255, 255)
+            addon = "NONE"
+            try:
+                if player.color == "RAINBOW":
+                    t = pygame.time.get_ticks() / 1000.0
+                    r = int(math.sin(t*3)*127+128)
+                    g = int(math.sin(t*3+2)*127+128)
+                    b = int(math.sin(t*3+4)*127+128)
+                    base_color = (r, g, b)
+                elif player.color == "BW_GRADIENT":
+                    t = pygame.time.get_ticks() / 1000.0
+                    v = int(math.sin(t*2)*127+128)
+                    base_color = (v, v, v)
+                elif isinstance(player.color, tuple):
+                    base_color = player.color
+                addon = player.addon
+            except NameError:
+                pass 
+            
+            # Draw tiny player body
+            pygame.draw.rect(surface, base_color, (p_x, p_y, p_size, p_size))
+            
+            # Draw tiny player eye (assuming facing right since moving right)
+            pygame.draw.rect(surface, (255, 255, 255), (p_x + 9, p_y + 4, 3, 3))
+            pygame.draw.rect(surface, (0, 0, 0), (p_x + 10, p_y + 4, 1, 1))
+
+            # Draw bandana if equipped
+            if addon == "NINJA_BANDANA":
+                pygame.draw.rect(surface, (200, 30, 30), (p_x, p_y + 2, p_size, 3))
+                # draw small tails pointing left
+                pygame.draw.polygon(surface, (200, 30, 30), [(p_x, p_y + 3), (p_x - 4, p_y + 6), (p_x - 1, p_y + 4)])
+
         
         # Darken if out of focus (not hovered)
         if not is_hovered:
@@ -244,6 +285,52 @@ class Particle:
     def draw(self, surface):
         if self.timer > 0:
             pygame.draw.rect(surface, self.color, (self.x, self.y, self.size, self.size))
+
+class Confetti:
+    def __init__(self):
+        self.x, self.y = random.randint(0, WIDTH), -50
+        self.vx, self.vy = random.uniform(-2, 2), random.uniform(2, 6)
+        self.color = random.choice([(255, 100, 100), (100, 255, 100), (100, 100, 255), (255, 255, 100), (255, 100, 255), (100, 255, 255)])
+        self.size = random.randint(4, 10)
+        self.rot_speed = random.uniform(-10, 10)
+        self.angle = random.uniform(0, 360)
+        self.sway_speed = random.uniform(0.5, 2.0)
+        self.sway_offset = random.uniform(0, math.pi * 2)
+
+    def update(self):
+        self.vy += 0.05 
+        self.x += self.vx + math.sin(pygame.time.get_ticks() / 1000.0 * self.sway_speed + self.sway_offset) * 2
+        self.y += self.vy
+        self.angle += self.rot_speed
+
+    def draw(self, surface):
+        surf = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+        pygame.draw.rect(surf, self.color, (0, 0, self.size, self.size))
+        rotated_surf = pygame.transform.rotate(surf, self.angle)
+        surface.blit(rotated_surf, rotated_surf.get_rect(center=(int(self.x), int(self.y))))
+
+class CoinDrop:
+    def __init__(self):
+        self.x, self.y = random.randint(0, WIDTH), -50
+        self.vx, self.vy = random.uniform(-1, 1), random.uniform(4, 8)
+        self.angle = random.uniform(0, 360)
+        self.rot_speed = random.uniform(5, 15)
+
+    def update(self):
+        self.vy += 0.1
+        self.x += self.vx
+        self.y += self.vy
+        self.angle += self.rot_speed
+
+    def draw(self, surface):
+        c_x, c_y = int(self.x), int(self.y)
+        pygame.draw.circle(surface, (200, 150, 0), (c_x, c_y), 12)
+        pygame.draw.circle(surface, (255, 215, 0), (c_x, c_y), 10)
+        
+        # Spinning reflection line
+        offset_x = int(math.cos(math.radians(self.angle)) * 6)
+        offset_y = int(math.sin(math.radians(self.angle)) * 6)
+        pygame.draw.line(surface, (255, 255, 255), (c_x - offset_x, c_y - offset_y), (c_x + offset_x, c_y + offset_y), 2)
 
 class CaveEntrance(pygame.sprite.Sprite):
     def __init__(self, x, y, w, h):
@@ -638,6 +725,7 @@ class Player(pygame.sprite.Sprite):
         self.is_climbing = False
         self.state, self.death_timer, self.invincible_timer = 'alive', 0, 0
         self.color = "DEFAULT"
+        self.addon = "NONE"
         self.particles = []
         
         self.has_dagger = False
@@ -798,6 +886,14 @@ class Player(pygame.sprite.Sprite):
         e_x, e_y = self.look_dir.x * 6, self.look_dir.y * 6
         pygame.draw.circle(surface, (255, 255, 255), (c_x + e_x, c_y + e_y), 14)
         pygame.draw.circle(surface, (0, 0, 0), (c_x + e_x * 1.8, c_y + e_y * 1.8), 6)
+
+        if self.addon == "NINJA_BANDANA":
+            bandana_y = self.rect.y + 4
+            pygame.draw.rect(surface, (200, 30, 30), (self.rect.x, bandana_y, self.width, 10))
+            dir_mult = self.look_dir.x if self.look_dir.x != 0 else -1
+            tail_x = self.rect.left if dir_mult >= 0 else self.rect.right
+            pygame.draw.polygon(surface, (200, 30, 30), [(tail_x, bandana_y + 2), (tail_x - 12 * dir_mult, bandana_y + 10), (tail_x - 4 * dir_mult, bandana_y + 8)])
+            pygame.draw.polygon(surface, (180, 20, 20), [(tail_x, bandana_y + 5), (tail_x - 15 * dir_mult, bandana_y + 15), (tail_x - 2 * dir_mult, bandana_y + 10)])
 
         if self.has_dagger:
             dagger_x = self.rect.right if self.look_dir.x >= 0 else self.rect.left
@@ -984,9 +1080,6 @@ btn_music = Button(WIDTH//2 - 100, HEIGHT//2 - 20, 200, 40, "MUSIC: ON")
 btn_sound = Button(WIDTH//2 - 100, HEIGHT//2 + 30, 200, 40, "SOUND: ON")
 btn_back_st = Button(WIDTH//2 - 100, HEIGHT - 80, 200, 50, "BACK")
 
-btn_color_cycle = Button(WIDTH//2 - 150, HEIGHT//2 - 120, 300, 50, "COLOR: DEFAULT")
-btn_buy = Button(WIDTH//2 - 100, HEIGHT//2 - 60, 200, 50, "EQUIPPED")
-btn_back_shop = Button(WIDTH//2 - 100, HEIGHT - 80, 200, 50, "BACK")
 
 available_colors = [
     {"id": "DEFAULT", "name": "DEFAULT", "color": "DEFAULT", "cost": 0},
@@ -999,7 +1092,26 @@ available_colors = [
 ]
 current_color_index = 0
 unlocked_colors = ["DEFAULT"]
+
+available_addons = [
+    {"id": "NONE", "name": "NONE", "addon": "NONE", "cost": 0},
+    {"id": "NINJA_BANDANA", "name": "NINJA BANDANA", "addon": "NINJA_BANDANA", "cost": 50}
+]
+current_addon_index = 0
+unlocked_addons = ["NONE"]
+
 total_coins = 0
+victory_particles = []
+
+# Colors
+btn_color_cycle = Button(WIDTH//2 - 100, HEIGHT//2 - 80, 200, 50, f"COLOR: {available_colors[current_color_index]['name']}", (50, 150, 200), (80, 180, 230))
+btn_buy = Button(WIDTH//2 - 100, HEIGHT//2 - 20, 200, 50, "EQUIPPED", (50, 200, 50), (80, 230, 80))
+
+# Addons
+btn_addon_cycle = Button(WIDTH//2 - 100, HEIGHT//2 + 40, 200, 50, f"ADDON: {available_addons[current_addon_index]['name']}", (150, 50, 200), (180, 80, 230))
+btn_buy_addon = Button(WIDTH//2 - 100, HEIGHT//2 + 100, 200, 50, "EQUIPPED", (50, 200, 50), (80, 230, 80))
+
+btn_back_shop = Button(WIDTH//2 - 100, HEIGHT - 80, 200, 50, "Back", (150, 50, 50), (180, 80, 80))
 
 btn_pause = IconButton(WIDTH - 50, 10, 40, 40, "hamburger")
 btn_resume = IconButton(WIDTH//2 - 80, HEIGHT//2 - 40, 40, 40, "resume")
@@ -1036,8 +1148,10 @@ while running:
                 if u in accounts_db and accounts_db[u]["password"] == p:
                     current_user = u
                     total_coins = accounts_db[u]["coins"]
-                    unlocked_colors = accounts_db[u]["unlocked_colors"]
-                    player.color = accounts_db[u]["equipped_color"]
+                    unlocked_colors = accounts_db[u].get("unlocked_colors", ["DEFAULT"])
+                    player.color = accounts_db[u].get("equipped_color", "DEFAULT")
+                    unlocked_addons = accounts_db[u].get("unlocked_addons", ["NONE"])
+                    player.addon = accounts_db[u].get("equipped_addon", "NONE")
                     
                     GAME_STATE = "SPLASH"
                     splash_start_time = current_time
@@ -1055,7 +1169,9 @@ while running:
                         "password": p,
                         "coins": 0,
                         "unlocked_colors": ["DEFAULT"],
-                        "equipped_color": "DEFAULT"
+                        "equipped_color": "DEFAULT",
+                        "unlocked_addons": ["NONE"],
+                        "equipped_addon": "NONE"
                     }
                     save_accounts(accounts_db)
                     
@@ -1063,6 +1179,8 @@ while running:
                     total_coins = accounts_db[u]["coins"]
                     unlocked_colors = accounts_db[u]["unlocked_colors"]
                     player.color = accounts_db[u]["equipped_color"]
+                    unlocked_addons = accounts_db[u]["unlocked_addons"]
+                    player.addon = accounts_db[u]["equipped_addon"]
                     
                     GAME_STATE = "SPLASH"
                     splash_start_time = current_time
@@ -1151,18 +1269,55 @@ while running:
                         accounts_db[current_user]["unlocked_colors"] = unlocked_colors
                         accounts_db[current_user]["equipped_color"] = cd["color"]
                         save_accounts(accounts_db)
+            
+            elif btn_addon_cycle.is_clicked(event):
+                current_addon_index = (current_addon_index + 1) % len(available_addons)
+                ad = available_addons[current_addon_index]
+                btn_addon_cycle.text = f"ADDON: {ad['name']}"
+                if ad["id"] in unlocked_addons:
+                    btn_buy_addon.text = "EQUIPPED" if player.addon == ad["addon"] else "EQUIP"
+                else:
+                    btn_buy_addon.text = f"BUY: {ad['cost']} COINS"
+            elif btn_buy_addon.is_clicked(event):
+                ad = available_addons[current_addon_index]
+                if ad["id"] in unlocked_addons:
+                    player.addon = ad["addon"]
+                    btn_buy_addon.text = "EQUIPPED"
+                    if current_user:
+                        accounts_db[current_user]["equipped_addon"] = ad["addon"]
+                        save_accounts(accounts_db)
+                elif total_coins >= ad["cost"]:
+                    total_coins -= ad["cost"]
+                    unlocked_addons.append(ad["id"])
+                    player.addon = ad["addon"]
+                    btn_buy_addon.text = "EQUIPPED"
+                    if current_user:
+                        accounts_db[current_user]["coins"] = total_coins
+                        accounts_db[current_user]["unlocked_addons"] = unlocked_addons
+                        accounts_db[current_user]["equipped_addon"] = ad["addon"]
+                        save_accounts(accounts_db)
 
         elif GAME_STATE == "VICTORY":
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_r:  # Press R to play again synced!
                     current_level = 1
                     GAME_STATE = 'PLAYING'
+                    victory_particles.clear()
                     load_level(current_level)
 
     # 2. STATE LOGIC & DRAWING
     if GAME_STATE == "LOGIN":
         screen.fill((20, 20, 30))
         
+        # Subtle floating cubes for the login background
+        t = pygame.time.get_ticks() / 1000.0
+        for i in range(20):
+            sz = 10 + (i % 5) * 5
+            x = (i * 45 + t * 20) % WIDTH
+            y = (HEIGHT - (i * 30 + t * 40)) % HEIGHT
+            pygame.draw.rect(screen, (30, 30, 40), (x, y, sz, sz), border_radius=2)
+            pygame.draw.rect(screen, (40, 40, 50), (x + (t*15+i*10)%WIDTH, (y + 100)%HEIGHT, sz//2, sz//2), border_radius=1)
+            
         title_surf = title_font.render("CUBE'S JOURNEY", True, (255, 255, 255))
         title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//4))
         screen.blit(title_surf, title_rect)
@@ -1260,16 +1415,19 @@ while running:
         btn_back_st.draw(screen)
 
     elif GAME_STATE == "SHOP":
-        screen.fill((20, 20, 30))
-        title_surf = title_font.render("SHOP", True, (255, 255, 255))
-        title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//8))
-        screen.blit(title_surf, title_rect)
+        screen.fill((40, 40, 50))
+        shop_title = title_font.render("SHOP", True, (255, 255, 255))
+        screen.blit(shop_title, shop_title.get_rect(center=(WIDTH//2, 80)))
         
-        coin_t = btn_font.render(f"COINS: {total_coins}", True, (255, 215, 0))
-        screen.blit(coin_t, (WIDTH//2 - coin_t.get_width()//2, HEIGHT//8 + 50))
+        coins_text = title_font.render(f"COINS: {total_coins}", True, (255, 215, 0))
+        screen.blit(coins_text, coins_text.get_rect(center=(WIDTH//2, 140)))
         
         btn_color_cycle.draw(screen)
         btn_buy.draw(screen)
+        
+        btn_addon_cycle.draw(screen)
+        btn_buy_addon.draw(screen)
+        
         btn_back_shop.draw(screen)
 
     elif GAME_STATE in ["PLAYING", "PAUSED"]:
@@ -1361,6 +1519,20 @@ while running:
         # The Golden Celebration screen!
         screen.fill((255, 215, 0)) 
         
+        # Spawn particles
+        if random.random() < 0.1:
+            victory_particles.append(CoinDrop())
+        for _ in range(3):
+            if random.random() < 0.4:
+                victory_particles.append(Confetti())
+                
+        # Update and draw particles
+        for p in victory_particles[:]:
+            p.update()
+            p.draw(screen)
+            if p.y > HEIGHT + 50:
+                victory_particles.remove(p)
+                
         title_text = title_font.render("VICTORY!", True, (255, 255, 255))
         subtitle_text = font.render("Cube has finally returned home!", True, (0, 0, 0))
         restart_text = font.render("Press 'R' to play again", True, (50, 50, 50))
