@@ -2,6 +2,8 @@ import pygame
 import sys
 import math
 import random
+import json
+import os
 
 # --- Game Setup & Constants ---
 pygame.init()
@@ -21,6 +23,25 @@ btn_font = pygame.font.SysFont('Arial', 24, bold=True)
 env_colors = {
     "sky": (100, 180, 210), "dirt": (86, 52, 24), "grass": (54, 180, 44)
 }
+
+# --- Account & Save System ---
+ACCOUNTS_FILE = "accounts.json"
+
+def load_accounts():
+    if not os.path.exists(ACCOUNTS_FILE):
+        return {}
+    try:
+        with open(ACCOUNTS_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_accounts(data):
+    with open(ACCOUNTS_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+accounts_db = load_accounts()
+current_user = None
 
 # --- UI Classes ---
 class Button:
@@ -153,6 +174,46 @@ class IconButton(Button):
             pygame.draw.rect(surface, (255, 150, 150), (cx - 6, cy - 8, 12, 16), border_radius=2)
             pygame.draw.line(surface, (255, 255, 255), (cx, cy), (cx + 10, cy), 2)
             pygame.draw.polygon(surface, (255, 255, 255), [(cx + 8, cy - 4), (cx + 8, cy + 4), (cx + 14, cy)])
+
+class TextInput:
+    def __init__(self, x, y, w, h, placeholder="", is_password=False):
+        self.rect = pygame.Rect(x, y, w, h)
+        self.text = ""
+        self.placeholder = placeholder
+        self.is_password = is_password
+        self.active = False
+        self.color_inactive = (60, 60, 70)
+        self.color_active = (100, 150, 255)
+        self.color = self.color_inactive
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if self.rect.collidepoint(event.pos):
+                self.active = True
+            else:
+                self.active = False
+            self.color = self.color_active if self.active else self.color_inactive
+            
+        if event.type == pygame.KEYDOWN and self.active:
+            if event.key == pygame.K_RETURN:
+                pass 
+            elif event.key == pygame.K_BACKSPACE:
+                self.text = self.text[:-1]
+            else:
+                if len(self.text) < 15 and event.unicode.isprintable(): 
+                    self.text += event.unicode
+
+    def draw(self, surface):
+        pygame.draw.rect(surface, self.color, self.rect, border_radius=4)
+        pygame.draw.rect(surface, (30, 30, 35), self.rect.inflate(-4, -4), border_radius=3)
+        
+        display_text = "*" * len(self.text) if self.is_password and self.text else self.text
+        if not self.text and not self.active:
+            text_surf = btn_font.render(self.placeholder, True, (150, 150, 150))
+        else:
+            text_surf = btn_font.render(display_text, True, (255, 255, 255))
+            
+        surface.blit(text_surf, (self.rect.x + 10, self.rect.y + self.rect.height // 2 - text_surf.get_height() // 2))
 
 # --- Visual Effects Classes ---
 class Particle:
@@ -721,9 +782,16 @@ stalactites = [Stalactite() for _ in range(10)]
 rock_tumblers = [RockTumbler() for _ in range(15)]
 
 # --- Game State Variables ---
-GAME_STATE = "SPLASH" # Includes: SPLASH, MENU, PLAYING, VICTORY
+GAME_STATE = "LOGIN" # Includes: LOGIN, SPLASH, MENU, PLAYING, VICTORY
 current_level = 1
-splash_start_time = pygame.time.get_ticks()
+splash_start_time = 0
+
+# Login UI Setup
+login_user_input = TextInput(WIDTH//2 - 125, HEIGHT//2 - 40, 250, 40, "Username")
+login_pass_input = TextInput(WIDTH//2 - 125, HEIGHT//2 + 10, 250, 40, "Password", is_password=True)
+btn_login = Button(WIDTH//2 - 125, HEIGHT//2 + 70, 120, 40, "LOGIN")
+btn_register = Button(WIDTH//2 + 5, HEIGHT//2 + 70, 120, 40, "REGISTER")
+login_message = ""
 
 # Main Menu UI Setup
 btn_play = Button(WIDTH//2 - 100, HEIGHT//2 - 20, 200, 50, "PLAY")
@@ -789,7 +857,47 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT: running = False
         
-        if GAME_STATE == "PLAYING":
+        if GAME_STATE == "LOGIN":
+            login_user_input.handle_event(event)
+            login_pass_input.handle_event(event)
+            
+            if btn_login.is_clicked(event):
+                u, p = login_user_input.text, login_pass_input.text
+                if u in accounts_db and accounts_db[u]["password"] == p:
+                    current_user = u
+                    total_coins = accounts_db[u]["coins"]
+                    unlocked_colors = accounts_db[u]["unlocked_colors"]
+                    player.color = accounts_db[u]["equipped_color"]
+                    
+                    GAME_STATE = "SPLASH"
+                    splash_start_time = current_time
+                else:
+                    login_message = "Invalid username or password"
+                    
+            elif btn_register.is_clicked(event):
+                u, p = login_user_input.text, login_pass_input.text
+                if not u or not p:
+                    login_message = "Fields cannot be empty"
+                elif u in accounts_db:
+                    login_message = "Username already exists"
+                else:
+                    accounts_db[u] = {
+                        "password": p,
+                        "coins": 0,
+                        "unlocked_colors": ["DEFAULT"],
+                        "equipped_color": "DEFAULT"
+                    }
+                    save_accounts(accounts_db)
+                    
+                    current_user = u
+                    total_coins = accounts_db[u]["coins"]
+                    unlocked_colors = accounts_db[u]["unlocked_colors"]
+                    player.color = accounts_db[u]["equipped_color"]
+                    
+                    GAME_STATE = "SPLASH"
+                    splash_start_time = current_time
+        
+        elif GAME_STATE == "PLAYING":
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_SPACE, pygame.K_UP, pygame.K_w): player.jump(platforms, vines)
                 if event.key == pygame.K_ESCAPE: GAME_STATE = "PAUSED"
@@ -847,11 +955,19 @@ while running:
                 if cd["id"] in unlocked_colors:
                     player.color = cd["color"]
                     btn_buy.text = "EQUIPPED"
+                    if current_user:
+                        accounts_db[current_user]["equipped_color"] = cd["color"]
+                        save_accounts(accounts_db)
                 elif total_coins >= cd["cost"]:
                     total_coins -= cd["cost"]
                     unlocked_colors.append(cd["id"])
                     player.color = cd["color"]
                     btn_buy.text = "EQUIPPED"
+                    if current_user:
+                        accounts_db[current_user]["coins"] = total_coins
+                        accounts_db[current_user]["unlocked_colors"] = unlocked_colors
+                        accounts_db[current_user]["equipped_color"] = cd["color"]
+                        save_accounts(accounts_db)
 
         elif GAME_STATE == "VICTORY":
             if event.type == pygame.KEYDOWN:
@@ -861,7 +977,23 @@ while running:
                     load_level(current_level)
 
     # 2. STATE LOGIC & DRAWING
-    if GAME_STATE == "SPLASH":
+    if GAME_STATE == "LOGIN":
+        screen.fill((20, 20, 30))
+        
+        title_surf = title_font.render("CUBE'S JOURNEY", True, (255, 255, 255))
+        title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//4))
+        screen.blit(title_surf, title_rect)
+        
+        login_user_input.draw(screen)
+        login_pass_input.draw(screen)
+        btn_login.draw(screen)
+        btn_register.draw(screen)
+        
+        if login_message:
+            msg_surf = font.render(login_message, True, (255, 100, 100))
+            screen.blit(msg_surf, msg_surf.get_rect(center=(WIDTH//2, login_user_input.rect.top - 20)))
+
+    elif GAME_STATE == "SPLASH":
         screen.fill((10, 10, 15)) 
         title_surf = title_font.render("CUBE'S JOURNEY HOME", True, (255, 255, 255))
         title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//2))
@@ -953,6 +1085,10 @@ while running:
             if pygame.sprite.spritecollide(player, portals, False) and player.state == 'alive':
                 current_level += 1
                 total_coins += 10
+                if current_user:
+                    accounts_db[current_user]["coins"] = total_coins
+                    save_accounts(accounts_db)
+                    
                 if current_level > 9: 
                     GAME_STATE = "VICTORY"
                 else:
