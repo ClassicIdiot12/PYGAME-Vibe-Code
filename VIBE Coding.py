@@ -48,6 +48,112 @@ class Button:
                 return True
         return False
 
+class LevelButton(Button):
+    def __init__(self, x, y, w, h, level_num):
+        super().__init__(x, y, w, h, f"LEVEL {level_num}")
+        self.level_num = level_num
+        self.bg_surface = pygame.Surface((w, h))
+        self.generate_texture(w, h)
+        
+    def generate_texture(self, w, h):
+        # Base colors based on biome logic from load_level
+        if self.level_num in [1, 2]: # Jungle
+            self.bg_surface.fill((100, 180, 210)) # Sky
+            pygame.draw.rect(self.bg_surface, (86, 52, 24), (0, h//2, w, h//2)) # Dirt
+            pygame.draw.rect(self.bg_surface, (54, 180, 44), (0, h//2, w, 15)) # Grass
+            # Add some leaves/trees
+            pygame.draw.circle(self.bg_surface, (34, 139, 34), (w//4, h//2), 20)
+            pygame.draw.circle(self.bg_surface, (34, 139, 34), (w*3//4, h//2 - 10), 25)
+            
+        elif self.level_num == 3: # Toxic
+            self.bg_surface.fill((30, 50, 70))
+            pygame.draw.rect(self.bg_surface, (60, 40, 20), (0, h//2 + 10, w, h//2))
+            pygame.draw.rect(self.bg_surface, (100, 255, 50), (0, h - 20, w, 20)) # Sludge
+            
+        elif self.level_num in [4, 5]: # Caves
+            self.bg_surface.fill((20, 20, 40) if self.level_num == 4 else (10, 10, 15))
+            pygame.draw.rect(self.bg_surface, (40, 30, 30) if self.level_num == 4 else (70, 70, 75), (0, h//2 + 10, w, h//2))
+            # Stalactites
+            pygame.draw.polygon(self.bg_surface, (50, 50, 55), [(w//4, 0), (w//4+20, 0), (w//4+10, h//3)])
+            pygame.draw.polygon(self.bg_surface, (50, 50, 55), [(w*3//4, 0), (w*3//4+15, 0), (w*3//4+7, h//4)])
+            
+        elif self.level_num == 6: # Spider Boss
+            self.bg_surface.fill((5, 5, 10))
+            pygame.draw.rect(self.bg_surface, (40, 40, 45), (0, h//2 - 10, w, h//2 + 10))
+            # Web lines
+            pygame.draw.line(self.bg_surface, (150, 150, 150), (0, 0), (w, h//2), 2)
+            pygame.draw.line(self.bg_surface, (150, 150, 150), (w, 0), (0, h//2), 2)
+            pygame.draw.circle(self.bg_surface, (130, 60, 160), (w//2, h//3), 15) # Mini boss body
+            
+        elif self.level_num in [7, 8]: # Sky Ruins
+            self.bg_surface.fill((150, 200, 250) if self.level_num == 7 else (40, 80, 40))
+            pygame.draw.rect(self.bg_surface, (200, 200, 220) if self.level_num == 7 else (60, 40, 20), (0, h - 30, w, 30))
+            # Clouds
+            pygame.draw.circle(self.bg_surface, (255, 255, 255), (w//3, h//4), 15)
+            pygame.draw.circle(self.bg_surface, (255, 255, 255), (w//3 + 15, h//4 - 5), 20)
+            pygame.draw.circle(self.bg_surface, (255, 255, 255), (w//3 + 30, h//4), 15)
+            
+        elif self.level_num == 9: # Volcano Final
+            self.bg_surface.fill((50, 20, 20))
+            pygame.draw.rect(self.bg_surface, (30, 10, 10), (0, h//2, w, h//2))
+            pygame.draw.rect(self.bg_surface, (255, 100, 0), (0, h - 25, w, 25)) # Lava
+            pygame.draw.circle(self.bg_surface, (255, 150, 0), (w//4, h - 25), 8) # Lava bubble
+
+    def draw(self, surface):
+        mouse_pos = pygame.mouse.get_pos()
+        is_hovered = self.rect.collidepoint(mouse_pos)
+        
+        # Draw the custom background scaled to current draw size
+        scaled_bg = pygame.transform.scale(self.bg_surface, (self.rect.width - 6, self.rect.height - 6))
+        
+        # Draw frame
+        pygame.draw.rect(surface, (200, 200, 200) if is_hovered else (50, 50, 60), self.rect, border_radius=8)
+        
+        # Blit the custom background inside the frame
+        surface.blit(scaled_bg, (self.rect.x + 3, self.rect.y + 3))
+        
+        # Darken if out of focus (not hovered)
+        if not is_hovered:
+            dark_overlay = pygame.Surface((self.rect.width - 6, self.rect.height - 6), pygame.SRCALPHA)
+            dark_overlay.fill((0, 0, 0, 100))
+            surface.blit(dark_overlay, (self.rect.x + 3, self.rect.y + 3))
+        
+        # Draw text with shadow for readability
+        text_surf = btn_font.render(self.text, True, (255, 255, 255))
+        shadow_surf = btn_font.render(self.text, True, (0, 0, 0))
+        text_rect = text_surf.get_rect(center=self.rect.center)
+        
+        surface.blit(shadow_surf, (text_rect.x + 2, text_rect.y + 2))
+        surface.blit(text_surf, text_rect)
+
+class IconButton(Button):
+    def __init__(self, x, y, w, h, icon_type):
+        super().__init__(x, y, w, h, "")
+        self.icon_type = icon_type
+
+    def draw(self, surface):
+        mouse_pos = pygame.mouse.get_pos()
+        is_hovered = self.rect.collidepoint(mouse_pos)
+        current_color = self.hover_color if is_hovered else self.color
+        
+        rad = self.rect.width // 2 if self.icon_type in ["resume", "quit"] else 8
+        pygame.draw.rect(surface, current_color, self.rect, border_radius=rad)
+        
+        inner_color = (120, 120, 130) if self.icon_type == "hamburger" else (40, 40, 50)
+        pygame.draw.rect(surface, inner_color, self.rect.inflate(-4, -4), border_radius=max(2, rad-2))
+        
+        cx, cy = self.rect.center
+        if self.icon_type == "hamburger":
+            pygame.draw.line(surface, (255, 255, 255), (cx - 10, cy - 6), (cx + 10, cy - 6), 3)
+            pygame.draw.line(surface, (255, 255, 255), (cx - 10, cy), (cx + 10, cy), 3)
+            pygame.draw.line(surface, (255, 255, 255), (cx - 10, cy + 6), (cx + 10, cy + 6), 3)
+        elif self.icon_type == "resume":
+            pygame.draw.polygon(surface, (100, 255, 100), [(cx - 4, cy - 8), (cx - 4, cy + 8), (cx + 8, cy)])
+        elif self.icon_type == "quit":
+            pygame.draw.rect(surface, (255, 150, 150), (cx - 6, cy - 8, 12, 16), border_radius=2)
+            pygame.draw.line(surface, (255, 255, 255), (cx, cy), (cx + 10, cy), 2)
+            pygame.draw.polygon(surface, (255, 255, 255), [(cx + 8, cy - 4), (cx + 8, cy + 4), (cx + 14, cy)])
+
 # --- Visual Effects Classes ---
 class Particle:
     def __init__(self, x, y, color):
@@ -290,30 +396,12 @@ class NPC(pygame.sprite.Sprite):
 class Projectile(pygame.sprite.Sprite):
     def __init__(self, x, y, dir_x):
         super().__init__()
-        
-        w, h = 120, 20
-        base = pygame.Surface((w, h), pygame.SRCALPHA)
-        
-        # Tail fading out to the left, glowing head on the right
-        pygame.draw.ellipse(base, (80, 0, 180, 20), (0, 5, 100, 10))
-        pygame.draw.ellipse(base, (120, 0, 220, 40), (20, 6, 90, 8))
-        pygame.draw.ellipse(base, (180, 50, 255, 80), (40, 7, 75, 6))
-        pygame.draw.ellipse(base, (220, 100, 255, 150), (60, 8, 50, 4))
-        pygame.draw.ellipse(base, (255, 200, 255, 255), (80, 9, 30, 2))
-        
-        # Plasma fuzz along the beam
-        for _ in range(25):
-            px = random.randint(20, 110)
-            py = random.randint(5, 15)
-            pygame.draw.circle(base, (200, 100, 255, 60), (px, py), random.randint(1, 3))
-            
-        if dir_x == -1:
-            self.image = pygame.transform.flip(base, True, False)
-        else:
-            self.image = base
-            
+        self.image = pygame.Surface((40, 20), pygame.SRCALPHA)
+        pygame.draw.ellipse(self.image, (255, 100, 0, 100), (0, 0, 40, 20)) 
+        pygame.draw.ellipse(self.image, (255, 150, 0), (5, 5, 30, 10))
+        pygame.draw.ellipse(self.image, (255, 255, 255), (10, 7, 20, 6))
         self.rect = self.image.get_rect(center=(x, y))
-        self.vx = 10 * dir_x # Slight speed boost for the laser
+        self.vx = 7 * dir_x 
     def update(self):
         self.rect.x += self.vx
         if self.rect.right < -100 or self.rect.left > WIDTH + 100: self.kill()
@@ -322,9 +410,7 @@ class Cannon(pygame.sprite.Sprite):
     def __init__(self, x, y, dir_x, offset=0):
         super().__init__()
         self.image = pygame.Surface((40, 30), pygame.SRCALPHA)
-        # Simple Gray Cannon
         pygame.draw.rect(self.image, (60, 60, 65), (0, 0, 40, 30), border_radius=5)
-        
         self.rect = self.image.get_rect(topleft=(x, y))
         self.dir_x, self.spawn_offset = dir_x, 45 if dir_x == 1 else -15
         self.last_shot = pygame.time.get_ticks() - offset 
@@ -390,14 +476,21 @@ class Player(pygame.sprite.Sprite):
         self.look_dir = vec(0, 0)
         self.is_climbing = False
         self.state, self.death_timer, self.invincible_timer = 'alive', 0, 0
+        self.color = "DEFAULT"
         self.particles = []
 
     def trigger_death(self):
         if self.state == 'alive':
             self.state, self.death_timer = 'dying', pygame.time.get_ticks()
             self.vel, self.acc = vec(0, 0), vec(0, 0)
+            
+            if self.color == "RAINBOW": base_c = (255, 100, 100)
+            elif self.color == "BW_GRADIENT": base_c = (150, 150, 150)
+            elif isinstance(self.color, tuple): base_c = self.color
+            else: base_c = (20, 20, 25)
+            
             for _ in range(40):
-                self.particles.append(Particle(self.rect.centerx, self.rect.centery, random.choice([(20, 20, 25), (255, 255, 255)])))
+                self.particles.append(Particle(self.rect.centerx, self.rect.centery, random.choice([base_c, (255, 255, 255)])))
 
     def update(self, platforms, vines, hazards, projectiles, trampolines, boss):
         current_time = pygame.time.get_ticks()
@@ -498,8 +591,21 @@ class Player(pygame.sprite.Sprite):
             return
         if pygame.time.get_ticks() - self.invincible_timer < 2000 and (pygame.time.get_ticks() // 150) % 2 == 0: return 
 
-        pygame.draw.rect(surface, (20, 20, 25), self.rect, border_radius=10)
-        pygame.draw.rect(surface, (80, 80, 90), (self.rect.x + 5, self.rect.y + 5, 10, 10), border_radius=5)
+        if self.color == "RAINBOW":
+            t = pygame.time.get_ticks() / 1000.0
+            draw_c = (int(math.sin(t*3)*127+128), int(math.sin(t*3+2)*127+128), int(math.sin(t*3+4)*127+128))
+        elif self.color == "BW_GRADIENT":
+            t = pygame.time.get_ticks() / 1000.0
+            v = int(math.sin(t*2)*127+128)
+            draw_c = (v, v, v)
+        elif isinstance(self.color, tuple):
+            draw_c = self.color
+        else:
+            draw_c = (20, 20, 25)
+
+        pygame.draw.rect(surface, draw_c, self.rect, border_radius=10)
+        inner_c = (min(255, draw_c[0] + 60), min(255, draw_c[1] + 60), min(255, draw_c[2] + 65))
+        pygame.draw.rect(surface, inner_c, (self.rect.x + 5, self.rect.y + 5, 10, 10), border_radius=5)
         
         c_x, c_y = self.rect.x + self.width / 2, self.rect.y + self.height / 2
         e_x, e_y = self.look_dir.x * 6, self.look_dir.y * 6
@@ -626,27 +732,43 @@ btn_settings = Button(WIDTH//2 - 100, HEIGHT//2 + 120, 200, 50, "SETTINGS")
 
 # Level Select UI Setup
 level_btns = []
-for i in range(9):
-    level_btns.append(Button(WIDTH//2 - 170 + (i%3)*130, HEIGHT//2 - 60 + (i//3)*70, 90, 40, f"LEVEL {i+1}"))
-btn_back_ls = Button(WIDTH//2 - 100, HEIGHT - 100, 200, 50, "BACK")
+columns = 3
+button_w, button_h = 150, 100
+spacing_x, spacing_y = 180, 120
+start_x = WIDTH//2 - (spacing_x * 1)
+start_y = HEIGHT//2 - (spacing_y * 1) - 40 
 
-boss_levels = [6]
-skull_img = pygame.Surface((16, 16), pygame.SRCALPHA)
-pygame.draw.rect(skull_img, (220, 220, 230), (0, 0, 16, 12), border_radius=4)
-pygame.draw.rect(skull_img, (220, 220, 230), (4, 12, 8, 4))
-pygame.draw.rect(skull_img, (30, 30, 35), (3, 4, 4, 4))
-pygame.draw.rect(skull_img, (30, 30, 35), (9, 4, 4, 4))
-pygame.draw.rect(skull_img, (30, 30, 35), (7, 9, 2, 2))
-pygame.draw.line(skull_img, (30, 30, 35), (6, 12), (6, 15))
-pygame.draw.line(skull_img, (30, 30, 35), (8, 12), (8, 15))
-pygame.draw.line(skull_img, (30, 30, 35), (10, 12), (10, 15))
+for i in range(9):
+    level_btns.append(LevelButton(start_x + (i%columns)*spacing_x - button_w//2, start_y + (i//columns)*spacing_y, button_w, button_h, i+1))
+btn_back_ls = Button(WIDTH//2 - 100, HEIGHT - 70, 200, 50, "BACK")
 
 # Settings UI Setup
 is_music_on = True
 is_sound_on = True
-btn_music = Button(WIDTH//2 - 100, HEIGHT//2 - 50, 200, 50, "MUSIC: ON")
-btn_sound = Button(WIDTH//2 - 100, HEIGHT//2 + 20, 200, 50, "SOUND: ON")
-btn_back_st = Button(WIDTH//2 - 100, HEIGHT - 100, 200, 50, "BACK")
+btn_music = Button(WIDTH//2 - 100, HEIGHT//2 + 20, 200, 40, "MUSIC: ON")
+btn_sound = Button(WIDTH//2 - 100, HEIGHT//2 + 70, 200, 40, "SOUND: ON")
+btn_back_st = Button(WIDTH//2 - 100, HEIGHT - 80, 200, 50, "BACK")
+
+btn_color_cycle = Button(WIDTH//2 - 150, HEIGHT//2 - 120, 300, 50, "COLOR: DEFAULT")
+btn_buy = Button(WIDTH//2 - 100, HEIGHT//2 - 60, 200, 50, "EQUIPPED")
+
+available_colors = [
+    {"id": "DEFAULT", "name": "DEFAULT", "color": "DEFAULT", "cost": 0},
+    {"id": "RED", "name": "CRIMSON RED", "color": (180, 40, 40), "cost": 10},
+    {"id": "GREEN", "name": "FOREST GREEN", "color": (40, 150, 50), "cost": 10},
+    {"id": "BLUE", "name": "OCEAN BLUE", "color": (40, 80, 180), "cost": 10},
+    {"id": "PURPLE", "name": "ROYAL PURPLE", "color": (120, 40, 180), "cost": 10},
+    {"id": "RAINBOW", "name": "RAINBOW", "color": "RAINBOW", "cost": 50},
+    {"id": "BW_GRADIENT", "name": "B/W GRADIENT", "color": "BW_GRADIENT", "cost": 50}
+]
+current_color_index = 0
+unlocked_colors = ["DEFAULT"]
+total_coins = 0
+
+btn_pause = IconButton(WIDTH - 50, 10, 40, 40, "hamburger")
+btn_resume = IconButton(WIDTH//2 - 80, HEIGHT//2, 40, 40, "resume")
+btn_quit_menu = IconButton(WIDTH//2 - 80, HEIGHT//2 + 60, 40, 40, "quit")
+
 menu_fade_alpha = 255
 menu_bg_timer = 0
 menu_scene_index = 0
@@ -670,6 +792,18 @@ while running:
         if GAME_STATE == "PLAYING":
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_SPACE, pygame.K_UP, pygame.K_w): player.jump(platforms, vines)
+                if event.key == pygame.K_ESCAPE: GAME_STATE = "PAUSED"
+            if btn_pause.is_clicked(event):
+                GAME_STATE = "PAUSED"
+                
+        elif GAME_STATE == "PAUSED":
+            if btn_resume.is_clicked(event) or btn_pause.is_clicked(event):
+                GAME_STATE = "PLAYING"
+            elif btn_quit_menu.is_clicked(event):
+                GAME_STATE = "MENU"
+                current_level = 1
+                load_level(1)
+                player.rect.centerx, player.rect.centery = WIDTH // 2, HEIGHT - 60
                 
         elif GAME_STATE == "MENU":
             if btn_play.is_clicked(event):
@@ -700,6 +834,24 @@ while running:
             elif btn_sound.is_clicked(event):
                 is_sound_on = not is_sound_on
                 btn_sound.text = "SOUND: ON" if is_sound_on else "SOUND: OFF"
+            elif btn_color_cycle.is_clicked(event):
+                current_color_index = (current_color_index + 1) % len(available_colors)
+                cd = available_colors[current_color_index]
+                btn_color_cycle.text = f"COLOR: {cd['name']}"
+                if cd["id"] in unlocked_colors:
+                    btn_buy.text = "EQUIPPED" if player.color == cd["color"] else "EQUIP"
+                else:
+                    btn_buy.text = f"BUY: {cd['cost']} COINS"
+            elif btn_buy.is_clicked(event):
+                cd = available_colors[current_color_index]
+                if cd["id"] in unlocked_colors:
+                    player.color = cd["color"]
+                    btn_buy.text = "EQUIPPED"
+                elif total_coins >= cd["cost"]:
+                    total_coins -= cd["cost"]
+                    unlocked_colors.append(cd["id"])
+                    player.color = cd["color"]
+                    btn_buy.text = "EQUIPPED"
 
         elif GAME_STATE == "VICTORY":
             if event.type == pygame.KEYDOWN:
@@ -774,44 +926,47 @@ while running:
     elif GAME_STATE == "LEVEL_SELECT":
         screen.fill((20, 20, 30))
         title_surf = title_font.render("SELECT LEVEL", True, (255, 255, 255))
-        title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//4 - 20))
+        title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//8))
         screen.blit(title_surf, title_rect)
         
-        for i, btn in enumerate(level_btns):
+        for btn in level_btns:
             btn.draw(screen)
-            if i + 1 in boss_levels:
-                # Draw skull badge slightly overlapping the top-right corner
-                screen.blit(skull_img, (btn.rect.right - 10, btn.rect.top - 8))
-                
         btn_back_ls.draw(screen)
 
     elif GAME_STATE == "SETTINGS":
         screen.fill((20, 20, 30))
-        title_surf = title_font.render("SETTINGS", True, (255, 255, 255))
-        title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//4 - 20))
+        title_surf = title_font.render("SHOP/SETTINGS", True, (255, 255, 255))
+        title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//8))
         screen.blit(title_surf, title_rect)
+        
+        coin_t = btn_font.render(f"COINS: {total_coins}", True, (255, 215, 0))
+        screen.blit(coin_t, (WIDTH//2 - coin_t.get_width()//2, HEIGHT//8 + 50))
         
         btn_music.draw(screen)
         btn_sound.draw(screen)
+        btn_color_cycle.draw(screen)
+        btn_buy.draw(screen)
         btn_back_st.draw(screen)
 
-    elif GAME_STATE == "PLAYING":
-        if pygame.sprite.spritecollide(player, portals, False) and player.state == 'alive':
-            current_level += 1
-            if current_level > 9: # Updated to trigger Victory after level 9! 
-                GAME_STATE = "VICTORY"
-            else:
-                load_level(current_level)
+    elif GAME_STATE in ["PLAYING", "PAUSED"]:
+        if GAME_STATE == "PLAYING":
+            if pygame.sprite.spritecollide(player, portals, False) and player.state == 'alive':
+                current_level += 1
+                total_coins += 10
+                if current_level > 9: 
+                    GAME_STATE = "VICTORY"
+                else:
+                    load_level(current_level)
 
-        for h in hazards:
-            if isinstance(h, WebTrap): h.update(platforms)
-            else: h.update()
-            
-        player.update(platforms, vines, hazards, projectiles, trampolines, boss_entity)
-        cannons.update(projectiles)
-        projectiles.update()
-        if boss_entity: boss_entity.update(hazards)
-        for npc in npcs: npc.update()
+            for h in hazards:
+                if isinstance(h, WebTrap): h.update(platforms)
+                else: h.update()
+                
+            player.update(platforms, vines, hazards, projectiles, trampolines, boss_entity)
+            cannons.update(projectiles)
+            projectiles.update()
+            if boss_entity: boss_entity.update(hazards)
+            for npc in npcs: npc.update()
 
         # Updated drawing logic to account for the new levels!
         screen.fill(env_colors["sky"])
@@ -847,6 +1002,26 @@ while running:
             npc.draw_tooltip(screen, player.pos) 
 
         player.draw(screen)
+        
+        coin_t = btn_font.render(f"COINS: {total_coins}", True, (255, 215, 0))
+        screen.blit(coin_t, (10, 10))
+        btn_pause.draw(screen)
+
+        if GAME_STATE == "PAUSED":
+            dim = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            dim.fill((0, 0, 0, 150))
+            screen.blit(dim, (0, 0))
+            
+            p_text = title_font.render("PAUSED", True, (255, 255, 255))
+            screen.blit(p_text, p_text.get_rect(center=(WIDTH//2, HEIGHT//3)))
+            
+            btn_resume.draw(screen)
+            res_text = font.render("Resume", True, (255, 255, 255))
+            screen.blit(res_text, (btn_resume.rect.right + 10, btn_resume.rect.centery - 10))
+            
+            btn_quit_menu.draw(screen)
+            quit_text = font.render("Main Menu", True, (255, 255, 255))
+            screen.blit(quit_text, (btn_quit_menu.rect.right + 10, btn_quit_menu.rect.centery - 10))
 
     elif GAME_STATE == "VICTORY":
         # The Golden Celebration screen!
