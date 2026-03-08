@@ -181,6 +181,10 @@ class IconButton(Button):
             pygame.draw.rect(surface, (255, 150, 150), (cx - 6, cy - 8, 12, 16), border_radius=2)
             pygame.draw.line(surface, (255, 255, 255), (cx, cy), (cx + 10, cy), 2)
             pygame.draw.polygon(surface, (255, 255, 255), [(cx + 8, cy - 4), (cx + 8, cy + 4), (cx + 14, cy)])
+        elif self.icon_type == "shop":
+            pygame.draw.rect(surface, (200, 200, 200), (cx - 8, cy - 2, 16, 12))
+            pygame.draw.polygon(surface, (150, 100, 100), [(cx - 10, cy - 2), (cx, cy - 10), (cx + 10, cy - 2)])
+            pygame.draw.rect(surface, (100, 200, 255), (cx - 4, cy + 2, 8, 8))
 
 class TextInput:
     def __init__(self, x, y, w, h, placeholder="", is_password=False):
@@ -957,8 +961,9 @@ login_message = ""
 
 # Main Menu UI Setup
 btn_play = Button(WIDTH//2 - 100, HEIGHT//2 - 20, 200, 50, "PLAY")
-btn_levels = Button(WIDTH//2 - 100, HEIGHT//2 + 50, 200, 50, "LEVEL SELECT")
-btn_settings = Button(WIDTH//2 - 100, HEIGHT//2 + 120, 200, 50, "SETTINGS")
+btn_levels = Button(WIDTH//2 - 100, HEIGHT//2 + 40, 200, 50, "LEVEL SELECT")
+btn_shop_main = Button(WIDTH//2 - 100, HEIGHT//2 + 100, 200, 50, "SHOP")
+btn_settings = Button(WIDTH//2 - 100, HEIGHT//2 + 160, 200, 50, "SETTINGS")
 
 # Level Select UI Setup
 level_btns = []
@@ -975,12 +980,13 @@ btn_back_ls = Button(WIDTH//2 - 100, HEIGHT - 60, 200, 50, "BACK")
 # Settings UI Setup
 is_music_on = True
 is_sound_on = True
-btn_music = Button(WIDTH//2 - 100, HEIGHT//2 + 20, 200, 40, "MUSIC: ON")
-btn_sound = Button(WIDTH//2 - 100, HEIGHT//2 + 70, 200, 40, "SOUND: ON")
+btn_music = Button(WIDTH//2 - 100, HEIGHT//2 - 20, 200, 40, "MUSIC: ON")
+btn_sound = Button(WIDTH//2 - 100, HEIGHT//2 + 30, 200, 40, "SOUND: ON")
 btn_back_st = Button(WIDTH//2 - 100, HEIGHT - 80, 200, 50, "BACK")
 
 btn_color_cycle = Button(WIDTH//2 - 150, HEIGHT//2 - 120, 300, 50, "COLOR: DEFAULT")
 btn_buy = Button(WIDTH//2 - 100, HEIGHT//2 - 60, 200, 50, "EQUIPPED")
+btn_back_shop = Button(WIDTH//2 - 100, HEIGHT - 80, 200, 50, "BACK")
 
 available_colors = [
     {"id": "DEFAULT", "name": "DEFAULT", "color": "DEFAULT", "cost": 0},
@@ -988,7 +994,6 @@ available_colors = [
     {"id": "GREEN", "name": "FOREST GREEN", "color": (40, 150, 50), "cost": 10},
     {"id": "BLUE", "name": "OCEAN BLUE", "color": (40, 80, 180), "cost": 10},
     {"id": "PURPLE", "name": "ROYAL PURPLE", "color": (120, 40, 180), "cost": 10},
-    {"id": "YELLOW", "name": "LEMON YELLOW", "color": (255, 255, 60), "cost": 10},
     {"id": "RAINBOW", "name": "RAINBOW", "color": "RAINBOW", "cost": 50},
     {"id": "BW_GRADIENT", "name": "B/W GRADIENT", "color": "BW_GRADIENT", "cost": 50}
 ]
@@ -997,9 +1002,11 @@ unlocked_colors = ["DEFAULT"]
 total_coins = 0
 
 btn_pause = IconButton(WIDTH - 50, 10, 40, 40, "hamburger")
-btn_resume = IconButton(WIDTH//2 - 80, HEIGHT//2, 40, 40, "resume")
-btn_quit_menu = IconButton(WIDTH//2 - 80, HEIGHT//2 + 60, 40, 40, "quit")
+btn_resume = IconButton(WIDTH//2 - 80, HEIGHT//2 - 40, 40, 40, "resume")
+btn_shop_pause = IconButton(WIDTH//2 - 80, HEIGHT//2 + 20, 40, 40, "shop")
+btn_quit_menu = IconButton(WIDTH//2 - 80, HEIGHT//2 + 80, 40, 40, "quit")
 
+previous_state = "MENU"
 menu_fade_alpha = 255
 menu_bg_timer = 0
 menu_scene_index = 0
@@ -1062,14 +1069,20 @@ while running:
         
         elif GAME_STATE == "PLAYING":
             if event.type == pygame.KEYDOWN:
-                if event.key in (pygame.K_UP, pygame.K_w): player.jump(platforms, vines)
+                if event.key in (pygame.K_SPACE, pygame.K_UP, pygame.K_w): player.jump(platforms, vines)
                 if event.key == pygame.K_ESCAPE: GAME_STATE = "PAUSED"
+                if event.key == pygame.K_s:
+                    GAME_STATE = "SHOP"
+                    previous_state = "PAUSED"
             if btn_pause.is_clicked(event):
                 GAME_STATE = "PAUSED"
                 
         elif GAME_STATE == "PAUSED":
             if btn_resume.is_clicked(event) or btn_pause.is_clicked(event):
                 GAME_STATE = "PLAYING"
+            elif btn_shop_pause.is_clicked(event):
+                GAME_STATE = "SHOP"
+                previous_state = "PAUSED"
             elif btn_quit_menu.is_clicked(event):
                 GAME_STATE = "MENU"
                 current_level = 1
@@ -1083,6 +1096,9 @@ while running:
                 load_level(current_level)
             elif btn_levels.is_clicked(event):
                 GAME_STATE = "LEVEL_SELECT"
+            elif btn_shop_main.is_clicked(event):
+                GAME_STATE = "SHOP"
+                previous_state = "MENU"
             elif btn_settings.is_clicked(event):
                 GAME_STATE = "SETTINGS"
                 
@@ -1105,6 +1121,10 @@ while running:
             elif btn_sound.is_clicked(event):
                 is_sound_on = not is_sound_on
                 btn_sound.text = "SOUND: ON" if is_sound_on else "SOUND: OFF"
+
+        elif GAME_STATE == "SHOP":
+            if btn_back_shop.is_clicked(event):
+                GAME_STATE = previous_state
             elif btn_color_cycle.is_clicked(event):
                 current_color_index = (current_color_index + 1) % len(available_colors)
                 cd = available_colors[current_color_index]
@@ -1209,6 +1229,7 @@ while running:
 
         btn_play.draw(screen)
         btn_levels.draw(screen)
+        btn_shop_main.draw(screen)
         btn_settings.draw(screen)
 
         if menu_fade_alpha > 0:
@@ -1230,18 +1251,26 @@ while running:
 
     elif GAME_STATE == "SETTINGS":
         screen.fill((20, 20, 30))
-        title_surf = title_font.render("SHOP/SETTINGS", True, (255, 255, 255))
+        title_surf = title_font.render("SETTINGS", True, (255, 255, 255))
+        title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//8))
+        screen.blit(title_surf, title_rect)
+        
+        btn_music.draw(screen)
+        btn_sound.draw(screen)
+        btn_back_st.draw(screen)
+
+    elif GAME_STATE == "SHOP":
+        screen.fill((20, 20, 30))
+        title_surf = title_font.render("SHOP", True, (255, 255, 255))
         title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//8))
         screen.blit(title_surf, title_rect)
         
         coin_t = btn_font.render(f"COINS: {total_coins}", True, (255, 215, 0))
         screen.blit(coin_t, (WIDTH//2 - coin_t.get_width()//2, HEIGHT//8 + 50))
         
-        btn_music.draw(screen)
-        btn_sound.draw(screen)
         btn_color_cycle.draw(screen)
         btn_buy.draw(screen)
-        btn_back_st.draw(screen)
+        btn_back_shop.draw(screen)
 
     elif GAME_STATE in ["PLAYING", "PAUSED"]:
         if GAME_STATE == "PLAYING":
@@ -1314,11 +1343,15 @@ while running:
             screen.blit(dim, (0, 0))
             
             p_text = title_font.render("PAUSED", True, (255, 255, 255))
-            screen.blit(p_text, p_text.get_rect(center=(WIDTH//2, HEIGHT//3)))
+            screen.blit(p_text, p_text.get_rect(center=(WIDTH//2, HEIGHT//4)))
             
             btn_resume.draw(screen)
             res_text = font.render("Resume", True, (255, 255, 255))
             screen.blit(res_text, (btn_resume.rect.right + 10, btn_resume.rect.centery - 10))
+            
+            btn_shop_pause.draw(screen)
+            shop_text = font.render("Shop", True, (255, 255, 255))
+            screen.blit(shop_text, (btn_shop_pause.rect.right + 10, btn_shop_pause.rect.centery - 10))
             
             btn_quit_menu.draw(screen)
             quit_text = font.render("Main Menu", True, (255, 255, 255))
