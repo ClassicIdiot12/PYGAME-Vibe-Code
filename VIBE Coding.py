@@ -803,6 +803,7 @@ while running:
                 GAME_STATE = "MENU"
                 current_level = 1
                 load_level(1)
+                player.rect.centerx, player.rect.centery = WIDTH // 2, HEIGHT - 60
                 
         elif GAME_STATE == "MENU":
             if btn_play.is_clicked(event):
