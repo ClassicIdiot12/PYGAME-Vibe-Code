@@ -468,15 +468,46 @@ class Zombie(pygame.sprite.Sprite):
         self.start_x = x
         self.walk_dist = walk_dist
         self.vx = 1.5
+        self.vy = 0.0
+        self.on_ground = False
         self.hp = 2
         self.is_dead = False
         self.i_frames = 0
 
-    def update(self):
+    def update(self, platforms):
         if self.is_dead: return
-        self.rect.x += self.vx
+
+        # Gravity
+        self.vy = min(self.vy + 0.5, 14)
+        self.rect.y += int(self.vy)
+        self.on_ground = False
+        for plat in platforms:
+            if self.rect.colliderect(plat.rect) and self.vy >= 0:
+                if self.rect.bottom - plat.rect.top <= max(int(self.vy) + 2, 4):
+                    self.rect.bottom = plat.rect.top
+                    self.vy = 0
+                    self.on_ground = True
+
+        # Edge detection: look one step ahead at foot level before moving
+        if self.on_ground:
+            look_x = self.rect.right + 4 if self.vx > 0 else self.rect.left - 4
+            foot_rect = pygame.Rect(look_x, self.rect.bottom, 4, 4)
+            if not any(foot_rect.colliderect(p.rect) for p in platforms):
+                self.vx *= -1
+
+        # Patrol bounds
         if abs(self.rect.centerx - self.start_x) > self.walk_dist:
-            self.vx *= -1
+            self.vx = -abs(self.vx) if self.rect.centerx > self.start_x else abs(self.vx)
+
+        # Move horizontally and resolve wall collisions
+        self.rect.x += int(self.vx)
+        for plat in platforms:
+            if self.rect.colliderect(plat.rect):
+                if self.vx > 0:
+                    self.rect.right = plat.rect.left
+                elif self.vx < 0:
+                    self.rect.left = plat.rect.right
+                self.vx *= -1
 
     def take_damage(self):
         current_time = pygame.time.get_ticks()
@@ -486,6 +517,16 @@ class Zombie(pygame.sprite.Sprite):
             self.vx *= 1.2
             if self.hp <= 0:
                 self.is_dead = True
+                cx, cy = self.rect.centerx, self.rect.centery
+                colors = [(50, 120, 50), (70, 160, 70), (30, 80, 30), (100, 180, 80), (20, 50, 20)]
+                for _ in range(18):
+                    p = Particle(cx + random.randint(-10, 10), cy + random.randint(-10, 10),
+                                 random.choice(colors))
+                    p.vx = random.uniform(-6, 6)
+                    p.vy = random.uniform(-8, -1)
+                    p.size = random.randint(4, 10)
+                    p.timer = random.randint(25, 50)
+                    zombie_death_particles.append(p)
                 self.kill()
                 return True
         return False
@@ -732,6 +773,7 @@ class Player(pygame.sprite.Sprite):
         self.is_attacking = False
         self.attack_timer = 0
         self.attack_cooldown = 0
+        self.attack_dir = vec(1, 0)
 
     def trigger_death(self):
         if self.state == 'alive':
@@ -766,12 +808,7 @@ class Player(pygame.sprite.Sprite):
         descend = keys[pygame.K_DOWN] or keys[pygame.K_s]
         moving_horizontally = keys[pygame.K_LEFT] or keys[pygame.K_a] or keys[pygame.K_RIGHT] or keys[pygame.K_d]
         
-        if self.has_dagger and keys[pygame.K_SPACE] and current_time - self.attack_cooldown > 500:
-            self.is_attacking = True
-            self.attack_timer = current_time
-            self.attack_cooldown = current_time
-            
-        if self.is_attacking and current_time - self.attack_timer > 200:
+        if self.is_attacking and current_time - self.attack_timer > 300:
             self.is_attacking = False
         
         if pygame.sprite.spritecollide(self, vines, False):
@@ -834,8 +871,11 @@ class Player(pygame.sprite.Sprite):
         for z in zombies:
             if not z.is_dead:
                 if self.is_attacking:
-                    attack_rect = pygame.Rect(self.rect.centerx, self.rect.y - 10, 40, 60)
-                    if self.look_dir.x < 0: attack_rect.x -= 40
+                    reach = 90
+                    ax = self.rect.centerx + self.attack_dir.x * reach
+                    ay = self.rect.centery + self.attack_dir.y * reach
+                    attack_rect = pygame.Rect(min(self.rect.centerx, ax) - 20, min(self.rect.centery, ay) - 20,
+                                              abs(ax - self.rect.centerx) + 40, abs(ay - self.rect.centery) + 40)
                     if attack_rect.colliderect(z.rect):
                         z.take_damage()
                 if self.rect.colliderect(z.rect) and current_time - self.invincible_timer > 2000:
@@ -898,13 +938,39 @@ class Player(pygame.sprite.Sprite):
         if self.has_dagger:
             dagger_x = self.rect.right if self.look_dir.x >= 0 else self.rect.left
             if self.is_attacking:
-                swipe_start = math.pi/4 if self.look_dir.x >= 0 else math.pi*0.75
-                swipe_end = -math.pi/4 if self.look_dir.x >= 0 else math.pi*1.25
-                arc_rect = pygame.Rect(self.rect.centerx - 30, self.rect.y - 10, 60, 60)
-                if self.look_dir.x >= 0:
-                    pygame.draw.arc(surface, (200, 200, 200), arc_rect, swipe_end, swipe_start, 4)
-                else:
-                    pygame.draw.arc(surface, (200, 200, 200), arc_rect, swipe_start, swipe_end, 4)
+                now = pygame.time.get_ticks()
+                t = min(1.0, (now - self.attack_timer) / 300.0)
+                center_angle = math.atan2(self.attack_dir.y, self.attack_dir.x)
+                sweep = math.pi * 0.78  # ~140 degree arc
+                sweep_start = center_angle - sweep / 2
+                current_angle = sweep_start + t * sweep
+                reach = 80
+                cx, cy = self.rect.centerx, self.rect.centery
+
+                # Swoosh trail: lines from sweep start up to current blade position
+                num_trail = 8
+                for i in range(num_trail):
+                    trail_angle = sweep_start + (i / (num_trail - 1)) * (current_angle - sweep_start)
+                    tip_x = cx + math.cos(trail_angle) * reach
+                    tip_y = cy + math.sin(trail_angle) * reach
+                    frac = i / (num_trail - 1)
+                    gray = int(60 + frac * 160)
+                    width = max(1, int(frac * 4))
+                    pygame.draw.line(surface, (gray, gray, min(255, gray + 30)), (cx, cy), (int(tip_x), int(tip_y)), width)
+
+                # Blade at current sweep position
+                blade_tip_x = cx + math.cos(current_angle) * reach
+                blade_tip_y = cy + math.sin(current_angle) * reach
+                pygame.draw.line(surface, (220, 230, 255), (cx, cy), (int(blade_tip_x), int(blade_tip_y)), 4)
+
+                # Crossguard perpendicular to blade
+                perp_x = -math.sin(current_angle) * 9
+                perp_y = math.cos(current_angle) * 9
+                guard_cx = cx + math.cos(current_angle) * 18
+                guard_cy = cy + math.sin(current_angle) * 18
+                pygame.draw.line(surface, (180, 140, 80),
+                    (int(guard_cx + perp_x), int(guard_cy + perp_y)),
+                    (int(guard_cx - perp_x), int(guard_cy - perp_y)), 3)
             else:
                 pygame.draw.line(surface, (150, 150, 150), (dagger_x, c_y + 5), (dagger_x + (5 * self.look_dir.x), c_y + 15), 3)
                 pygame.draw.line(surface, (100, 50, 20), (dagger_x, c_y + 5), (dagger_x - (2 * self.look_dir.x), c_y), 3)
@@ -913,6 +979,7 @@ class Player(pygame.sprite.Sprite):
 player = Player()
 platforms, vines, hazards, trampolines, cannons, projectiles, npcs, portals, scenery, zombies = [pygame.sprite.Group() for _ in range(10)]
 boss_entity = None
+zombie_death_particles = []
 
 def load_level(level_num):
     global boss_entity
@@ -1018,7 +1085,7 @@ def load_level(level_num):
         env_colors.update({"sky": (30, 20, 40), "dirt": (50, 40, 50), "grass": (30, 20, 30)})
         platforms.add(Platform(0, HEIGHT - 60, WIDTH, 60))
         zombies.add(Zombie(300, HEIGHT - 60, 50), Zombie(500, HEIGHT - 60, 50))
-        npcs.add(NPC(100, HEIGHT - 110, "Use SPACE to swing your dagger at zombies!"))
+        npcs.add(NPC(100, HEIGHT - 110, "Click to swing your dagger toward the cursor!"))
         portals.add(Portal(WIDTH - 50, HEIGHT - 60))
         player.spawn_point = vec(50, HEIGHT - 100)
 
@@ -1192,6 +1259,16 @@ while running:
                 if event.key == pygame.K_s:
                     GAME_STATE = "SHOP"
                     previous_state = "PAUSED"
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if player.has_dagger and current_time - player.attack_cooldown > 500:
+                    mx, my = event.pos
+                    dx = mx - player.rect.centerx
+                    dy = my - player.rect.centery
+                    length = max(math.sqrt(dx * dx + dy * dy), 1)
+                    player.attack_dir = vec(dx / length, dy / length)
+                    player.is_attacking = True
+                    player.attack_timer = current_time
+                    player.attack_cooldown = current_time
             if btn_pause.is_clicked(event):
                 GAME_STATE = "PAUSED"
                 
@@ -1451,7 +1528,7 @@ while running:
             player.update(platforms, vines, hazards, projectiles, trampolines, boss_entity)
             cannons.update(projectiles)
             projectiles.update()
-            zombies.update()
+            zombies.update(platforms)
             if boss_entity: boss_entity.update(hazards)
             for npc in npcs: npc.update()
 
@@ -1481,7 +1558,12 @@ while running:
         cannons.draw(screen)
         projectiles.draw(screen)
         zombies.draw(screen)
-        
+        for p in zombie_death_particles[:]:
+            p.update()
+            p.draw(screen)
+            if p.timer <= 0:
+                zombie_death_particles.remove(p)
+
         if boss_entity: boss_entity.draw(screen)
         
         for portal in portals: portal.draw(screen)
